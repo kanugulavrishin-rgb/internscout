@@ -80,7 +80,7 @@ function classify(title) {
   if (/machine learning|\bml\b|\bai\b|data scien|research scien|applied scien/.test(t)) return "AI & Data Science";
   if (/data (engineer|analyst|analytics)|analytics|business intelligence/.test(t)) return "Data & Analytics";
   if (/software|engineer|developer|swe|backend|frontend|full.?stack|infrastructure|security|mobile|ios|android/.test(t)) return "Software Engineering";
-  if (/product manag|\bpm\b|program manag/.test(t)) return "Product";
+  if (/product (?:manag|owner|lead|operations|ops|strategy|director)|head of product|\bpm\b|program manag|project manag|scrum master/.test(t)) return "Product";
   if (/design|ux|ui\b|brand|creative|illustrat|animat/.test(t)) return "Design";
   if (/hardware|electrical|mechanical|silicon|asic|fpga/.test(t)) return "Hardware";
   if (/finance|account|strategy|operations|business|sales|consult|legal|people|recruit|hr\b/.test(t)) return "Business & Ops";
@@ -134,11 +134,31 @@ const SPONSORSHIP = { "Offers Sponsorship": "Sponsors visas", "Does Not Offer Sp
 const NEWGRAD_RE = /\b(new[- ]?grads?|new graduates?|recent (?:college )?grad(?:uate)?s?|university grad(?:uate)?s?|college grad(?:uate)?s?|campus hire|graduate (?:program|scheme|rotational|engineer|analyst|developer|associate|trainee)|entry[- ]level|early[- ]career|rotational(?: program)?|leadership development program|development program|associate (?:software|engineer|developer|data|analyst|consultant|scientist|product)|(?:engineer|developer|analyst|scientist|consultant|designer|accountant|programmer) (?:i|1)\b|junior|jr\.? (?:engineer|developer|analyst|designer|data|software)|class of 20\d\d|20\d\d (?:start|graduate|new grad|university)|university (?:hire|graduate|program)|full[- ]time.*20\d\d graduates?)\b/i;
 const SENIOR_RE = /\b(senior|sr\.?|staff|principal|lead|manager|director|head of|vp|vice president|architect|\b(?:ii|iii|iv|2|3|4)\b(?! ?20)|experienced|mid[- ]level|supervisor|chief|distinguished)\b/i;
 // "Internship", "Full-time" (early-career) or null for everything else.
+// Full-time job families collected at every experience level (early-career roles are
+// collected in every field). Extend with FULLTIME_FAMILIES=product,program,... to limit.
+const FAMILIES = {
+  product: /\b(product (?:manager|management|owner|lead|director|operations|ops|strategy|leader)|(?:group|principal|staff|senior|lead|technical|associate) product manager|head of product|(?:vp|vice president|director|chief)[ ,-]*(?:of )?product\b|cpo\b)/i,
+  program: /\b((?:technical |senior |principal |lead )?program manager|project manager|project management|scrum master|delivery manager|agile coach|pmo\b|portfolio manager)/i,
+  analyst: /\b((?:business|data|financial|finance|operations|strategy|product|marketing|pricing|risk|supply chain|bi|business intelligence) analyst|analytics manager)/i,
+  design: /\b((?:product|ux|ui|ux\/ui|interaction|visual|service) designer|ux research(?:er)?|user research(?:er)?|design (?:manager|lead|director)|head of design)/i,
+  marketing: /\b(product marketing|marketing manager|growth (?:manager|marketing|lead)|brand manager|content marketing|demand generation|lifecycle marketing|marketing director|head of marketing|go-to-market)/i,
+};
+const ACTIVE_FAMILIES = (process.env.FULLTIME_FAMILIES || Object.keys(FAMILIES).join(",")).split(",").map((f) => FAMILIES[f.trim()]).filter(Boolean);
+const NOT_FULLTIME = /\b(part[- ]time|contract(?:or)?|temporary|temp\b|freelance|volunteer|seasonal|per diem)\b/i;
+// "Internship", "Full-time" or null for everything else.
 function kindOf(title, hint) {
   if (INTERN_RE.test(title)) return "Internship";
   if (hint) return hint;
   if (NEWGRAD_RE.test(title) && !SENIOR_RE.test(title)) return "Full-time";
+  if (!NOT_FULLTIME.test(title) && ACTIVE_FAMILIES.some((re) => re.test(title))) return "Full-time";
   return null;
+}
+// Experience level of a full-time role, from its title.
+function levelOf(title) {
+  if (NEWGRAD_RE.test(title) && !SENIOR_RE.test(title)) return "Early career";
+  if (/\b(director|head of|vp|vice president|chief|principal|staff|group product|senior manager)\b/i.test(title)) return "Leadership";
+  if (/\b(senior|sr\.?|lead|iii|iv)\b/i.test(title)) return "Senior";
+  return "Mid-level";
 }
 
 function normalize({ source, company, title, location, url, postedAt, remoteFlag, trusted, category, seasons, degrees, sponsorship, kind: kindHint }) {
@@ -163,6 +183,7 @@ function normalize({ source, company, title, location, url, postedAt, remoteFlag
     degrees: degrees?.length ? degrees : degreesFrom(title),
     sponsorship: SPONSORSHIP[sponsorship] || "Not stated",
     kind,
+    ...(kind === "Full-time" ? { level: kindHint === "Full-time" && trusted && !SENIOR_RE.test(title) ? "Early career" : levelOf(title) } : {}),
   }, compactTerm(termsFrom(title, "")));
 }
 
@@ -296,8 +317,8 @@ async function fromWorkday({ host, tenant, site, company }) {
   const api = `https://${host}/wday/cxs/${tenant}/${site}`;
   const postings = [], seenPaths = new Set();
   // "intern" finds intern/internship; "summer co-op" finds Summer Analyst programs and co-ops.
-  for (const searchText of ["intern", "summer co-op", "new graduate", "entry level"]) {
-    if (searchText !== "intern" && !postings.length) break; // quiet site: skip the second search
+  for (const searchText of ["intern", "summer co-op", "new graduate", "entry level", "product manager", "program manager", "analyst"]) {
+    if ((searchText === "summer co-op" || searchText === "new graduate" || searchText === "entry level") && !postings.length) continue; // quiet for students: skip student searches
     for (let offset = 0; offset < 400; offset += 20) {
       const page = await postJSON(`${api}/jobs`, { appliedFacets: {}, limit: 20, offset, searchText });
       for (const p of page.jobPostings || []) if (!seenPaths.has(p.externalPath)) { seenPaths.add(p.externalPath); postings.push(p); }
@@ -327,7 +348,7 @@ async function fromWorkday({ host, tenant, site, company }) {
 
 async function fromSmartRecruiters({ slug, company }) {
   const out = [], seenIds = new Set();
-  for (const q of ["intern", "graduate", "entry level"]) for (let offset = 0; offset < 300; offset += 100) {
+  for (const q of ["intern", "graduate", "entry level", "product manager", "program manager", "analyst", "designer", "marketing manager"]) for (let offset = 0; offset < 300; offset += 100) {
     const page = await getJSON(`https://api.smartrecruiters.com/v1/companies/${slug}/postings?q=${encodeURIComponent(q)}&limit=100&offset=${offset}`);
     page.content = (page.content || []).filter((p) => !seenIds.has(p.id) && seenIds.add(p.id));
     for (const p of page.content || []) {
@@ -374,7 +395,7 @@ async function fromWorkable({ slug, company }) {
 
 async function fromOracle({ host, site, company }) {
   const reqs = new Map();
-  for (const kw of ["intern", "graduate", "entry level"]) {
+  for (const kw of ["intern", "graduate", "entry level", "product manager", "program manager", "analyst"]) {
     const data = await getJSON(`https://${host}/hcmRestApi/resources/latest/recruitingCEJobRequisitions?onlyData=true&expand=requisitionList.secondaryLocations&finder=findReqs;siteNumber=${site},keyword=${encodeURIComponent(kw)},limit=100`);
     for (const r of data.items?.[0]?.requisitionList || []) reqs.set(r.Id, r);
   }
@@ -399,7 +420,7 @@ async function fromOracle({ host, site, company }) {
 async function fromJibe({ host, company }) {
   const out = [];
   const seenSlugs = new Set();
-  for (const kw of ["intern", "graduate", "entry level"]) for (let page = 1; page <= 5; page++) {
+  for (const kw of ["intern", "graduate", "entry level", "product manager", "program manager", "analyst", "designer"]) for (let page = 1; page <= 5; page++) {
     const data = await getJSON(`https://${host}/api/jobs?keywords=${encodeURIComponent(kw)}&page=${page}&limit=100`);
     data.jobs = (data.jobs || []).filter(({ data: d }) => !seenSlugs.has(d.slug) && seenSlugs.add(d.slug));
     for (const { data: d } of data.jobs || []) {
@@ -446,7 +467,7 @@ async function fromIcims({ host, company }) {
 // Eightfold career sites (Microsoft, John Deere and others) share one search API.
 async function fromEightfold({ host, domain, company }) {
   const out = [];
-  for (const query of ["intern", "new grad", "university graduate"]) for (let start = 0; start < 500; start += 100) {
+  for (const query of ["intern", "new grad", "university graduate", "product manager", "program manager", "analyst"]) for (let start = 0; start < 500; start += 100) {
     const { data } = await getJSON(`https://${host}/api/pcsx/search?domain=${encodeURIComponent(domain)}&query=${encodeURIComponent(query)}&location=United%20States&start=${start}&num=100`);
     for (const p of data?.positions || []) {
       const n = normalize({ source: "eightfold", company: company || domain.split(".")[0], title: p.name, location: (p.standardizedLocations?.length ? p.standardizedLocations : p.locations || []).join(" • "), url: `https://${host}${p.positionUrl}`, postedAt: p.postedTs ? p.postedTs * 1000 : null, remoteFlag: /remote/i.test(p.workLocationOption || "") });
@@ -532,7 +553,7 @@ async function fromPaylocity({ guid, company }) {
 // Single large employers with their own public career APIs.
 async function fromAmazon() {
   const out = [];
-  for (const q of ["intern", "internship", "co-op", "new grad", "university graduate", "entry level"]) {
+  for (const q of ["intern", "internship", "co-op", "new grad", "university graduate", "entry level", "product manager", "program manager"]) {
     for (let offset = 0; offset < 1000; offset += 100) {
       const d = await getJSON(`https://www.amazon.jobs/en/search.json?base_query=${q}&loc_query=United%20States&country=USA&result_limit=100&offset=${offset}`);
       for (const j of d.jobs || []) {
@@ -847,7 +868,8 @@ function publish() {
   });
   published = dedupe(all);
   for (const j of published) Object.assign(j, cycleOf(j.seasons, j.term || {}));
-  for (const k of ["Internship", "Full-time"]) applyEstimates(published.filter((j) => (j.kind || "Internship") === k), k === "Internship" ? research.findings() : {}, STATES);
+  applyEstimates(published.filter((j) => (j.kind || "Internship") === "Internship"), research.findings(), STATES);
+  for (const lv of ["Early career", "Mid-level", "Senior", "Leadership"]) applyEstimates(published.filter((j) => j.kind === "Full-time" && (j.level || "Early career") === lv), {}, STATES);
   status.total = published.length;
   status.withPay = published.filter((j) => j.pay?.basis === "posted").length;
   status.employers = new Set(published.map((j) => squash(j.company))).size;
@@ -906,6 +928,7 @@ const Filters = z.object({
   remoteOnly: z.boolean(),
   season: z.string().describe("e.g. 'Summer 2027', 'Fall', or empty string"),
   degree: z.enum(["", "Bachelor's", "Master's", "PhD", "MBA"]).describe("The student's degree program, if they mentioned it"),
+  level: z.enum(["", "Early career", "Mid-level", "Senior", "Leadership"]).describe("Experience level for full-time roles, if the person said"),
   kind: z.enum(["", "Internship", "Full-time"]).describe("Internship, Full-time (new grad / entry level), or empty for both"),
   offCycle: z.boolean().describe("True if the student wants internships outside the summer: fall, spring, winter, co-ops, part-time during school, year-round"),
   cycle: z.array(z.enum(["Summer", "Fall", "Spring", "Winter", "Co-op", "Part-time", "Year-round", "Contract"])).describe("Specific kinds of term or arrangement the student asked for; empty if none"),
@@ -966,8 +989,10 @@ function heuristicFilters(message, current = {}) {
   if (/\bcontract|temp(orary)?\b|freelance/.test(m)) cyc.add("Contract");
   for (const [re, label] of [[/\bfall\b|autumn/, "Fall"], [/\bspring\b/, "Spring"], [/\bwinter\b/, "Winter"]]) if (re.test(m) && !s?.[2]) cyc.add(label);
   const offCycle = /off[- ]?(cycle|season)|not (in )?(the )?summer|non[- ]summer|outside (of )?(the )?summer/.test(m) || (!/any (term|season|time)/.test(m) && !!base.offCycle);
-  const kind = /full[- ]?time|new ?grad|entry[- ]level|after (i )?graduat|junior role|first job/.test(m) ? "Full-time" : /\bintern(ship)?s?\b|co-?op/.test(m) ? "Internship" : /both|either|any (role|job) type/.test(m) ? "" : base.kind ?? "Internship";
+  const kind = /full[- ]?time|new ?grad|entry[- ]level|after (i )?graduat|junior role|first job|senior|experienced|director|mid[- ]level|\bmanager\b(?! intern)/.test(m) && !/\bintern/.test(m) ? "Full-time" : /\bintern(ship)?s?\b|co-?op/.test(m) ? "Internship" : /both|either|any (role|job) type/.test(m) ? "" : base.kind ?? "Internship";
+  const level = /new ?grad|entry[- ]level|junior|first job/.test(m) ? "Early career" : /director|head of|\bvp\b|vice president|principal|leadership/.test(m) ? "Leadership" : /senior|\bsr\b/.test(m) ? "Senior" : /mid[- ]level/.test(m) ? "Mid-level" : base.level || "";
   return {
+    level,
     kind,
     offCycle,
     cycle: /any (term|season|time)/.test(m) ? [] : [...cyc],

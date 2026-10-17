@@ -473,7 +473,7 @@ body.dropping::after { content: "Drop your resume to match internships"; positio
       <div class="trust" id="trust"></div>
       <div class="kindsw" role="radiogroup" aria-label="Role type" id="kindsw">
         <button type="button" role="radio" data-kind="Internship" aria-checked="true">Internships</button>
-        <button type="button" role="radio" data-kind="Full-time" aria-checked="false">Full-time · new grad</button>
+        <button type="button" role="radio" data-kind="Full-time" aria-checked="false">Full-time jobs</button>
         <button type="button" role="radio" data-kind="" aria-checked="false">Both</button>
       </div>
       <div class="bsearch">
@@ -518,7 +518,7 @@ async function unpackSnapshot() {
 
 /* ---------------- state ---------------- */
 let JOBS = [], STATUS = null, loaded = false;
-const blank = () => ({ keywords: [], categories: [], states: [], remoteOnly: false, kind: "Internship", season: "", offCycle: false, cycle: [], weeksBand: "", termConfirmed: false, degree: "", needsVisa: false, minHourlyPay: 0, paidOnly: false, payPostedOnly: false, companies: [], postedWithinDays: 0 });
+const blank = () => ({ keywords: [], categories: [], states: [], remoteOnly: false, kind: "Internship", level: "", season: "", offCycle: false, cycle: [], weeksBand: "", termConfirmed: false, degree: "", needsVisa: false, minHourlyPay: 0, paidOnly: false, payPostedOnly: false, companies: [], postedWithinDays: 0 });
 /* view-only settings that never go to the server */
 const V = { q: "", sort: "new", strongOnly: false, hideApplied: store.get("is-hide-applied", true) };
 let applied = new Set(store.get("is-applied", []));
@@ -577,6 +577,7 @@ function matches(j, f = F, skip) {
   if (skip !== "remote" && f.remoteOnly && !j.remote) return false;
   if (skip !== "season" && f.season && !j.seasons.some((s) => seasonMatch(f.season, s))) return false;
   if (skip !== "kind" && f.kind && (j.kind || "Internship") !== f.kind) return false;
+  if (skip !== "level" && f.level && (j.kind !== "Full-time" || (j.level || "Early career") !== f.level)) return false;
   if (skip !== "cycle" && (f.offCycle || f.cycle?.length)) {
     // several picks widen the search: a role matches if it fits any of them
     if (!((f.offCycle && j.offCycle) || (f.cycle || []).some((c) => (j.cycle || []).includes(c)))) return false;
@@ -620,6 +621,7 @@ function describeRest(f) {
   if (where.length) s += ` in ${where.length > 2 ? where.slice(0, -1).join(", ") + " or " + where.at(-1) : where.join(" or ")}`;
   if (f.remoteOnly) s += where.length ? " or remote" : ", remote";
   if (f.season) s += `, ${f.season}`;
+  if (f.level) s += `, ${f.level.toLowerCase()}`;
   if (f.offCycle) s += ", off-cycle";
   if (f.cycle?.length) s += `, ${f.cycle.join(" or ").toLowerCase()}`;
   if (f.weeksBand) s += `, ${WEEK_BANDS[f.weeksBand][2]}`;
@@ -703,7 +705,7 @@ function jobCard(j, i = 0) {
       <button type="button" class="heart" data-save="${esc(j.id)}" aria-pressed="${saved.has(j.id)}" aria-label="Save ${esc(j.title)}">${heartSvg}</button></div>
     <div class="jtitle"><h4>${esc(j.title)}</h4>${payChip(j)}</div>
     ${j.pay?.basis === "estimate" ? `<div class="paynote">${esc(j.pay.note)}${j.pay.sources?.length ? ` <a href="${esc(j.pay.sources[0])}" target="_blank" rel="noopener">Source</a>` : ""}</div>` : ""}
-    <div class="tags"><span class="tag"><i style="--c:${CAT_HUE[j.category]}"></i>${esc(j.category)}</span>${j.kind === "Full-time" ? `<span class="tag ft">Full-time · early career</span>` : ""}${j.offCycle ? `<span class="tag offc">Off-cycle</span>` : ""}${degreeTag(j)}${j.sponsorship !== "Not stated" ? `<span class="tag ${j.sponsorship === "Sponsors visas" ? "good" : "warn"}">${esc(j.sponsorship)}</span>` : ""}</div>
+    <div class="tags"><span class="tag"><i style="--c:${CAT_HUE[j.category]}"></i>${esc(j.category)}</span>${j.kind === "Full-time" ? `<span class="tag ft">Full-time · ${esc((j.level || "Early career").toLowerCase())}</span>` : ""}${j.offCycle ? `<span class="tag offc">Off-cycle</span>` : ""}${degreeTag(j)}${j.sponsorship !== "Not stated" ? `<span class="tag ${j.sponsorship === "Sponsors visas" ? "good" : "warn"}">${esc(j.sponsorship)}</span>` : ""}</div>
     ${fits ? `<div class="fits">${esc(fits)}</div>` : ""}
     ${PROFILE && j._why?.length ? `<div class="why">${esc(j._why.join(" · "))}</div>` : ""}
     ${termBlock(j)}
@@ -999,7 +1001,8 @@ function localFilters(message, current) {
     states: anywhere ? [] : states.size ? [...states] : base.states,
     remoteOnly: /not remote|in.?person|on.?site/.test(m) ? false : /remote/.test(m) || (!anywhere && base.remoteOnly),
     season: s ? s[0].replace(/^\w/, (c) => c.toUpperCase()) : /any (time|season)/.test(m) ? "" : base.season,
-    kind: /full[- ]?time|new ?grad|entry[- ]level|after (i )?graduat|first job/.test(m) ? "Full-time" : /\bintern(ship)?s?\b|co-?op/.test(m) ? "Internship" : /both|either/.test(m) ? "" : base.kind ?? "Internship",
+    level: /new ?grad|entry[- ]level|junior|first job/.test(m) ? "Early career" : /director|head of|\bvp\b|vice president|principal|leadership/.test(m) ? "Leadership" : /senior|\bsr\b/.test(m) ? "Senior" : /mid[- ]level/.test(m) ? "Mid-level" : base.level || "",
+    kind: /full[- ]?time|new ?grad|entry[- ]level|after (i )?graduat|first job|senior|experienced|director|mid[- ]level/.test(m) && !/\bintern/.test(m) ? "Full-time" : /\bintern(ship)?s?\b|co-?op/.test(m) ? "Internship" : /both|either/.test(m) ? "" : base.kind ?? "Internship",
     offCycle: /off[- ]?(cycle|season)|not (in )?(the )?summer|non[- ]summer|outside (of )?(the )?summer/.test(m) || (!/any (term|season|time)/.test(m) && base.offCycle),
     cycle: /any (term|season|time)/.test(m) ? [] : [...new Set([...(base.cycle || []), ...(/\bco-?ops?\b/.test(m) ? ["Co-op"] : []), ...(/part[- ]time|during (the )?(school|semester)|while (in|at) school/.test(m) ? ["Part-time"] : []), ...(/year[- ]round/.test(m) ? ["Year-round"] : []), ...(/\bcontract|temporary|freelance/.test(m) ? ["Contract"] : [])])],
     weeksBand: base.weeksBand || "", termConfirmed: /confirmed|verified dates/.test(m) || base.termConfirmed || false,
@@ -1159,6 +1162,7 @@ function renderBoard() {
     if (F.remoteOnly) pills.push(["Remote", "remoteOnly", ""]);
     if (F.season) pills.push([F.season, "season", ""]);
     if (F.offCycle) pills.push(["Off-cycle", "offCycle", ""]);
+    if (F.level) pills.push([F.level, "level", ""]);
     F.cycle.forEach((c) => pills.push([c, "cycle", c]));
     if (F.weeksBand) pills.push([WEEK_BANDS[F.weeksBand][2], "weeksBand", ""]);
     if (F.termConfirmed) pills.push(["Term confirmed in description", "termConfirmed", ""]);
@@ -1173,6 +1177,10 @@ function renderBoard() {
     const fb = (label, n, on, attrs) => `<button type="button" aria-pressed="${on}" ${attrs}>${esc(label)} <small>${fmt(n)}</small></button>`;
     const nActive = pills.length;
     let fx = "";
+    if (F.kind !== "Internship") {
+      const lvBase = JOBS.filter((j) => j.kind === "Full-time" && matches(j, F, "level"));
+      fx += facet("Experience level", ["Early career", "Mid-level", "Senior", "Leadership"].map((lv) => fb(lv, lvBase.filter((j) => (j.level || "Early career") === lv).length, F.level === lv, `data-facet="level" data-val="${lv}"`)));
+    }
     fx += facet("Role", tally(JOBS.filter((j) => matches(j, F, "categories")), "category").map(([c, n]) => fb(c, n, F.categories.includes(c), `data-facet="categories" data-val="${esc(c)}"`)));
     const whereBase = JOBS.filter((j) => matches(j, F, "states"));
     fx += facet("Where", [fb("Remote", whereBase.filter((j) => j.remote).length, F.remoteOnly, 'data-facet="remoteOnly"'), ...tally(whereBase, "states").slice(0, 20).map(([s, n]) => fb(STATE_NAMES[s] || s, n, F.states.includes(s), `data-facet="states" data-val="${s}"`))]);
@@ -1226,6 +1234,7 @@ $("#bbody").addEventListener("click", (e) => {
       else { const vals = v.split(","), on = vals.every((c) => F.cycle.includes(c)); F.cycle = on ? F.cycle.filter((c) => !vals.includes(c)) : [...new Set([...F.cycle, ...vals])]; }
     }
     else if (k === "kind") F.kind = v;
+    else if (k === "level") F.level = F.level === v ? "" : v;
     else if (k === "postedWithinDays") F.postedWithinDays = Number(v);
     else F[k] = F[k].includes(v) ? F[k].filter((x) => x !== v) : [...F[k], v];
     boardChanged();
@@ -1314,7 +1323,8 @@ function greet() {
     { label: "PhD research roles", run: () => ask("PhD research internships") },
     { label: "Design internships", run: () => ask("Product design internships") },
     { label: "📄 Match my resume", run: () => $("#resumeFile").click() },
-    { label: "New grad full-time roles", run: () => refine("New grad full-time roles", { kind: "Full-time" }, "Full-time, early career. Your first real job, right here.") },
+    { label: "New grad full-time roles", run: () => refine("New grad full-time roles", { kind: "Full-time", level: "Early career" }, "Full-time, early career. Your first real job, right here.") },
+    { label: "Product management jobs", run: () => refine("Product management jobs", { kind: "Full-time", categories: ["Product"] }, "Product management, every level from associate PM to VP of Product.") },
   ]);
 }
 function paintGreeting() {
