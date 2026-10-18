@@ -566,6 +566,66 @@ async function fromAmazon() {
   return out;
 }
 
+// Postings that also appear on LinkedIn, Indeed, ZipRecruiter and other job sites, read from
+// Google for Jobs through a licensed API (JSearch or SerpAPI; we never touch those sites).
+// Only postings with an apply link on the employer's own site are kept.
+// Off unless JSEARCH_API_KEY or SERPAPI_KEY is set. Runs every JOBS_API_INTERVAL_HOURS (6);
+// between runs the last results are served from data/google-jobs.json so they don't expire.
+const GOOGLE_JOBS_FILE = path.join(ROOT, "data", "google-jobs.json");
+const GOOGLE_JOBS_QUERIES = (process.env.JOBS_API_QUERIES || [
+  "software engineering intern", "data science intern", "machine learning intern", "product management intern",
+  "business analyst intern", "finance intern", "marketing intern", "mechanical engineering intern", "electrical engineering intern",
+  "co-op", "spring 2027 internship", "fall 2027 internship",
+  "new grad software engineer", "entry level analyst", "associate product manager",
+  "product manager", "senior product manager", "director of product management", "program manager", "product marketing manager",
+].join("|")).split("|");
+const JOB_SITES = /linkedin|indeed|ziprecruiter|glassdoor|simplyhired|monster|careerbuilder|dice|talent\.com|jooble|lensa|builtin|wellfound|handshake|snagajob|getwork|jobright/i;
+async function fromGoogleJobs() {
+  const { JSEARCH_API_KEY: jsKey, SERPAPI_KEY: serpKey } = process.env;
+  if (!jsKey && !serpKey) return [];
+  let cache = { at: 0, rows: [] };
+  try { cache = JSON.parse(await readFile(GOOGLE_JOBS_FILE, "utf8")); } catch {}
+  const interval = Number(process.env.JOBS_API_INTERVAL_HOURS || 6) * 36e5;
+  let rows = cache.rows;
+  if (Date.now() - cache.at > interval) {
+    rows = [];
+    const budget = Number(process.env.JOBS_API_MAX_REQUESTS || 20);
+    for (const q of GOOGLE_JOBS_QUERIES.slice(0, budget)) {
+      try {
+        if (jsKey) {
+          const d = await getJSON(`https://jsearch.p.rapidapi.com/search?query=${encodeURIComponent(q + " in United States")}&page=1&num_pages=1&country=us&date_posted=week`, { headers: { "x-rapidapi-key": jsKey, "x-rapidapi-host": "jsearch.p.rapidapi.com" } });
+          for (const j of d.data || []) {
+            const opts = [...(j.apply_options || []).map((o) => ({ link: o.apply_link, direct: o.is_direct, via: o.publisher })), { link: j.job_apply_link, direct: j.job_apply_is_direct, via: j.job_publisher }];
+            const link = opts.find((o) => o.link && !JOB_SITES.test(o.link) && applyInfo(o.link)?.direct)?.link;
+            if (!link) continue;
+            rows.push({ company: j.employer_name, title: j.job_title, location: [j.job_city, j.job_state, j.job_country === "US" ? "United States" : j.job_country].filter(Boolean).join(", ") || (j.job_is_remote ? "Remote, US" : ""), remote: !!j.job_is_remote, url: link, postedAt: j.job_posted_at_datetime_utc, seenOn: [...new Set(opts.map((o) => o.via).filter((v) => v && JOB_SITES.test(v)))], description: (j.job_description || "").slice(0, 6000), min: j.job_min_salary, max: j.job_max_salary, period: j.job_salary_period, internType: j.job_employment_type });
+          }
+        } else {
+          const d = await getJSON(`https://serpapi.com/search.json?engine=google_jobs&q=${encodeURIComponent(q)}&location=United%20States&gl=us&hl=en&api_key=${serpKey}`);
+          for (const j of d.jobs_results || []) {
+            const link = (j.apply_options || []).map((o) => o.link).find((l) => l && !JOB_SITES.test(l) && applyInfo(l)?.direct);
+            if (!link) continue;
+            const via = [j.via, ...(j.apply_options || []).map((o) => o.title)].filter((v) => v && JOB_SITES.test(v)).map((v) => v.replace(/^via\s+/i, "").replace(/^Apply on\s+/i, ""));
+            rows.push({ company: j.company_name, title: j.title, location: j.location, url: link, postedAt: null, seenOn: [...new Set(via)], description: (j.description || "").slice(0, 6000), salaryText: j.detected_extensions?.salary || "", internType: j.detected_extensions?.schedule_type });
+          }
+        }
+      } catch (e) { console.error("[google-jobs]", q, e.message); }
+    }
+    await mkdir(path.dirname(GOOGLE_JOBS_FILE), { recursive: true });
+    await writeFile(GOOGLE_JOBS_FILE, JSON.stringify({ at: Date.now(), rows }));
+  }
+  const out = [];
+  for (const r of rows) {
+    const kindHint = /intern/i.test(r.internType || "") ? "Internship" : undefined;
+    const n = normalize({ source: "googlejobs", company: r.company, title: r.title, location: r.location, url: r.url, postedAt: r.postedAt, remoteFlag: r.remote, kind: kindHint });
+    if (!n) continue;
+    n.seenOn = r.seenOn.map((v) => v.replace(/\.com$/i, "").replace(/^\w/, (c) => c.toUpperCase()));
+    n.pay = (r.min && posted(r.min, r.max || r.min, periodFrom(r.period || ""))) || parsePay([r.salaryText ? "pay " + r.salaryText : "", r.description].join(" ")) || undefined;
+    if (describeJob(n, r.description)) out.push(n);
+  }
+  return out;
+}
+
 async function fromTikTok() {
   const out = [];
   for (const kw of ["intern", "graduate"]) for (let offset = 0; offset < 3000; offset += 100) {
@@ -777,7 +837,7 @@ function allTasks() {
     tasks.push([`${type}:${b.slug || b.guid || (b.site ? `${b.host}/${b.site}` : b.host)}`, () => fn(b)]);
   }
   tasks.push(...COMMUNITY_LISTS.map(([label, url, kind]) => ["list:" + label, () => fromCommunityList(url, label, kind)]),
-    ...LIST_SOURCES.map(([label, url, only]) => ["list:" + label, () => fromRepoList(label, url, only)]), ["adzuna", fromAdzuna], ["usajobs", fromUSAJobs], ["amazon", fromAmazon], ["tiktok", fromTikTok]);
+    ...LIST_SOURCES.map(([label, url, only]) => ["list:" + label, () => fromRepoList(label, url, only)]), ["adzuna", fromAdzuna], ["usajobs", fromUSAJobs], ["amazon", fromAmazon], ["tiktok", fromTikTok], ["googlejobs", fromGoogleJobs]);
   return tasks;
 }
 
@@ -893,7 +953,7 @@ async function researchPay() {
 // Keep one copy, preferring the company's own feed, and fill gaps from the others.
 let published = [];
 let payload = null;
-const SOURCE_RANK = { "simplify-newgrad": 1, "community-newgrad": 2, "speedy-swe-ng": 2, "speedy-ai-ng": 2, internatlas: 2, dreamwork: 2, "dreamwork-biz": 2, waypoint: 2, tailed: 2, wonofakind: 2, neetiv: 2, hiderrick: 2, semis: 2, mecheng: 2, keugene: 2, zshah: 2, secnet: 2, "mech-tracker": 2, applyguy: 2, "speedy-swe": 2, "speedy-ai": 2, sndsh: 2, jobbie: 2, chieler: 2, derec: 2, azhar: 2, "azhar-biz": 2, "azhar-eng": 2, mehek: 2, "mehek-biz": 2, "mehek-hw": 2, "mehek-ds": 2, resumax: 2, "nuft-quant": 2, greenhouse: 0, lever: 0, ashby: 0, workday: 0, smartrecruiters: 0, workable: 0, oracle: 0, icims: 0, eightfold: 0, rippling: 0, amazon: 0, tiktok: 0, jobvite: 0, jazzhr: 0, bamboohr: 0, paylocity: 0, usajobs: 0, simplify: 1, community: 2, adzuna: 3 };
+const SOURCE_RANK = { googlejobs: 2, "simplify-newgrad": 1, "community-newgrad": 2, "speedy-swe-ng": 2, "speedy-ai-ng": 2, internatlas: 2, dreamwork: 2, "dreamwork-biz": 2, waypoint: 2, tailed: 2, wonofakind: 2, neetiv: 2, hiderrick: 2, semis: 2, mecheng: 2, keugene: 2, zshah: 2, secnet: 2, "mech-tracker": 2, applyguy: 2, "speedy-swe": 2, "speedy-ai": 2, sndsh: 2, jobbie: 2, chieler: 2, derec: 2, azhar: 2, "azhar-biz": 2, "azhar-eng": 2, mehek: 2, "mehek-biz": 2, "mehek-hw": 2, "mehek-ds": 2, resumax: 2, "nuft-quant": 2, greenhouse: 0, lever: 0, ashby: 0, workday: 0, smartrecruiters: 0, workable: 0, oracle: 0, icims: 0, eightfold: 0, rippling: 0, amazon: 0, tiktok: 0, jobvite: 0, jazzhr: 0, bamboohr: 0, paylocity: 0, usajobs: 0, simplify: 1, community: 2, adzuna: 3 };
 const squash = (s) => (s || "").toLowerCase().replace(/\b(inc|llc|ltd|corp|corporation|co|company|technologies|technology)\b\.?/g, "").replace(/[^a-z0-9]/g, "");
 const dedupeKey = (j) => `${squash(j.company)}|${squash(j.title)}|${j.states[0] || (j.remote ? "remote" : "us")}`;
 function dedupe(list) {
@@ -909,6 +969,7 @@ function dedupe(list) {
       if (!keep.pay && j.pay?.basis === "posted") keep.pay = j.pay;
       if (j.source !== keep.source && SOURCE_RANK[j.source] < 3 && j.degrees?.length) keep.degrees = j.degrees;
       if (j.category && keep.category === "Other") keep.category = j.category;
+      if (j.seenOn?.length) keep.seenOn = [...new Set([...(keep.seenOn || []), ...j.seenOn])];
       if (j.postedAt && (!keep.postedAt || j.postedAt < keep.postedAt)) keep.postedAt = j.postedAt;
       continue;
     }

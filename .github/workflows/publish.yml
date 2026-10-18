@@ -5,6 +5,10 @@ on:
   schedule:
     - cron: "17 */6 * * *"
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "full = scrape everything; seed = publish seed/index.html right away"
+        default: full
 permissions:
   contents: read
   pages: write
@@ -30,11 +34,18 @@ jobs:
           path: data
           key: scrape-${{ github.run_id }}
           restore-keys: scrape-
+      - name: Publish the seed page (quick start)
+        if: ${{ github.event.inputs.mode == 'seed' }}
+        run: mkdir -p site && cp seed/index.html site/index.html
       - name: Scrape and build
+        if: ${{ github.event.inputs.mode != 'seed' }}
         run: node scripts/scrape-once.mjs
         env:
           MAX_MINUTES: "320"
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # optional: postings also listed on LinkedIn/Indeed, via Google for Jobs (licensed API)
+          JSEARCH_API_KEY: ${{ secrets.JSEARCH_API_KEY }}
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

@@ -709,7 +709,7 @@ function jobCard(j, i = 0) {
     ${fits ? `<div class="fits">${esc(fits)}</div>` : ""}
     ${PROFILE && j._why?.length ? `<div class="why">${esc(j._why.join(" · "))}</div>` : ""}
     ${termBlock(j)}
-    <div class="dest">${lockSvg}<span>Applies on <b>${esc(j.applyHost)}</b></span></div>
+    <div class="dest">${lockSvg}<span>Applies on <b>${esc(j.applyHost)}</b>${j.seenOn?.length ? ` · also listed on ${esc(j.seenOn.slice(0, 3).join(", "))}` : ""}</span></div>
     <div class="jfoot">${isNew(j) ? `<span class="newdot">New · ${ago(j.postedAt)}</span>` : `<span>${ago(j.postedAt)}</span>`}
       <button type="button" class="did" data-applied="${esc(j.id)}" aria-pressed="${applied.has(j.id)}">${applied.has(j.id) ? "Applied ✓" : "Mark applied"}</button>
       <a class="apply" href="${esc(j.url)}" target="_blank" rel="noopener" data-apply="${esc(j.id)}" aria-label="Apply to ${esc(j.title)} at ${esc(j.company)} on ${esc(j.applyHost)} (opens in a new tab)">Apply ${arrow}</a></div>
