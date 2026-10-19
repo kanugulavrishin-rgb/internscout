@@ -17,7 +17,7 @@
   --accent-text: #FFA06E; --live: #4FD8B4;
   --glass: rgba(24, 20, 34, .56); --glass-strong: rgba(26, 22, 38, .86); --wash: rgba(245, 239, 230, .07); --wash-2: rgba(245, 239, 230, .12);
   --shadow: 0 24px 60px rgba(0, 0, 0, .45), 0 2px 8px rgba(0, 0, 0, .35); --shadow-sm: 0 8px 22px rgba(0, 0, 0, .28); --hl: inset 0 1px 0 rgba(255, 255, 255, .06);
-  --aurora: .55; --grain: .08; --cap-bg: rgba(11, 10, 18, .6);
+  --aurora: .42; --grain: .05; --cap-bg: rgba(11, 10, 18, .6);
   --grad: linear-gradient(110deg, var(--ember), var(--magenta) 52%, var(--violet));
   --serif: "Fraunces", "Iowan Old Style", Georgia, serif;
   --sans: "Commissioner", "Gill Sans", "Segoe UI", system-ui, sans-serif;
@@ -30,14 +30,14 @@
     --bg: #F2E9DA; --bg-2: #EADFCC; --text: #241C27; --muted: #5F5459; --faint: #7A6E70; --accent-text: #A8400F; --live: #13896B;
     --glass: rgba(255, 250, 241, .6); --glass-strong: rgba(255, 250, 241, .9); --wash: rgba(36, 28, 39, .06); --wash-2: rgba(36, 28, 39, .1);
     --shadow: 0 22px 50px rgba(110, 70, 30, .14), 0 2px 6px rgba(110, 70, 30, .1); --shadow-sm: 0 8px 20px rgba(110, 70, 30, .12); --hl: inset 0 1px 0 rgba(255, 255, 255, .75);
-    --aurora: .32; --grain: .1; color-scheme: light;
+    --aurora: .26; --grain: .05; color-scheme: light;
   }
 }
 :root[data-theme="light"] {
   --bg: #F2E9DA; --bg-2: #EADFCC; --text: #241C27; --muted: #5F5459; --faint: #7A6E70; --accent-text: #A8400F; --live: #13896B;
   --glass: rgba(255, 250, 241, .6); --glass-strong: rgba(255, 250, 241, .9); --wash: rgba(36, 28, 39, .06); --wash-2: rgba(36, 28, 39, .1);
   --shadow: 0 22px 50px rgba(110, 70, 30, .14), 0 2px 6px rgba(110, 70, 30, .1); --shadow-sm: 0 8px 20px rgba(110, 70, 30, .12); --hl: inset 0 1px 0 rgba(255, 255, 255, .75);
-  --aurora: .32; --grain: .1; color-scheme: light;
+  --aurora: .26; --grain: .05; color-scheme: light;
 }
 
 * { box-sizing: border-box; }
@@ -387,7 +387,7 @@ body.dropping::after { content: "Drop your resume to match internships"; positio
   .dock { padding: 36px 12px 80px; border-radius: 0; }
   .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -12px; padding: 4px 12px 8px; }
   .chips::-webkit-scrollbar { display: none; }
-  .chip { flex: none; }
+  .chip { flex: none; animation: none !important; }
   .starts { grid-template-columns: minmax(0, 1fr); }
   .start { min-height: 120px; padding: 14px 16px; }
   .start b { font-size: 21px; }
@@ -422,7 +422,7 @@ body.dropping::after { content: "Drop your resume to match internships"; positio
 /* ================= refined aurora (shared spec with Outreach Desk) =================
    Calmer atmosphere, one signature gradient reserved for the accent word, the primary
    action and selected states; everything else is neutral glass with concentric radii. */
-:root { --aurora: .42; --grain: .05; --r-xl: 28px; --r-lg: 20px; --r-md: 14px;
+:root { --r-xl: 28px; --r-lg: 20px; --r-md: 14px;
   --edge: rgba(245, 239, 230, .08);
   --shadow: inset 0 1px 0 rgba(255, 255, 255, .06), 0 1px 2px rgba(0, 0, 0, .3), 0 24px 60px -12px rgba(0, 0, 0, .55);
   --shadow-sm: inset 0 1px 0 rgba(255, 255, 255, .05), 0 1px 2px rgba(0, 0, 0, .25), 0 10px 28px -10px rgba(0, 0, 0, .45);
@@ -477,7 +477,7 @@ p, .say, .hello p, .fits, .paynote, .evidence { text-wrap: pretty; }
 .ghost, .railbtn, .cbtn, .chip, .react, .apply, .start, .job, .when button, .facet button, .tabs button, .kindsw button, .thumb, .more, .heart, .did, .outreach, .send {
   transition-property: transform, background-color, border-color, color, box-shadow, opacity; transition-duration: 180ms; transition-timing-function: var(--ease); }
 .ghost:active, .railbtn:active, .cbtn:active, .chip:active, .react:active, .apply:active, .when button:active, .facet button:active, .tabs button:active, .kindsw button:active, .more:active, .heart:active, .outreach:active, .send:active, .start:active { transform: scale(.97); }
-@keyframes rise { from { opacity: 0; transform: translateY(6px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes rise { from { opacity: .35; transform: translateY(6px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
 .msg, .thinking, .chip, .milestone { animation: rise 280ms var(--ease) both; }
 .job { animation: rise 280ms var(--ease) both; animation-delay: calc(var(--i, 0) * 50ms + 120ms); }
 .hello { animation: none; }
@@ -490,7 +490,20 @@ p, .say, .hello p, .fits, .paynote, .evidence { text-wrap: pretty; }
   .msg, .thinking, .chip, .milestone, .job { animation: fade .2s linear both !important; }
   .ghost:active, .chip:active, .react:active, .apply:active, .send:active, .start:active { transform: none; }
 }
-@media (max-width: 860px) { .bhead h2 { white-space: nowrap; font-size: 19px; } .bhead .tabs button { padding: 5px 10px; letter-spacing: .1em; } .outreach span { display: none; } .outreach { padding: 0; width: 44px; justify-content: center; } }
+/* flow, not overlap: the composer sits below the conversation instead of floating over it,
+   and the starting cards size to their content and wrap when the column is narrow */
+.convo { display: flex; flex-direction: column; }
+.scroll { padding-bottom: 28px; mask-image: linear-gradient(to bottom, transparent 0, #000 24px, #000 calc(100% - 28px), transparent 100%); }
+.dock { position: relative; left: auto; right: auto; bottom: auto; flex: none; padding: 10px 8px 6px; background: none; }
+.chips { min-height: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 2px 2px 6px; mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
+.chips::-webkit-scrollbar { display: none; }
+.chip { flex: none; }
+.bhead h2 { white-space: nowrap; }
+.starts { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.start { min-height: 0; justify-content: flex-start; padding: 14px 16px 18px; gap: 6px; }
+.start .count { position: static; align-self: flex-start; margin-bottom: 18px; }
+.start b { font-size: 21px; }
+@media (max-width: 860px) { .dock { padding: 8px 12px 78px; } .scroll { padding: 8px 16px 20px; } .bhead h2 { white-space: nowrap; font-size: 19px; } .bhead .tabs button { padding: 5px 10px; letter-spacing: .1em; } .outreach span { display: none; } .outreach { padding: 0; width: 44px; justify-content: center; } }
 </style>
 </head>
 <body>
@@ -1746,7 +1759,7 @@ document.addEventListener("drop", (e) => { if (!e.dataTransfer.files.length) ret
 /* ---------------- composer ---------------- */
 const input = $("#input");
 function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 160) + "px"; input.style.overflowY = input.scrollHeight > 160 ? "auto" : "hidden"; }
-if (mobile()) input.placeholder = "What are you hoping for?";
+if (mobile()) input.placeholder = "Ask Scout…";
 input.addEventListener("input", autosize);
 input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(input.value); } });
 $("#composer").onsubmit = (e) => { e.preventDefault(); ask(input.value); };
