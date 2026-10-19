@@ -1,9 +1,9 @@
 # Scrapes every employer board, then publishes the site to GitHub Pages for free.
-# Runs every 6 hours and on demand (Actions tab -> "Update InternScout" -> Run workflow).
+# Runs every 12 hours and on demand (Actions tab -> "Update InternScout" -> Run workflow).
 name: Update InternScout
 on:
   schedule:
-    - cron: "17 */6 * * *"
+    - cron: "17 */12 * * *"
   workflow_dispatch:
     inputs:
       mode:
