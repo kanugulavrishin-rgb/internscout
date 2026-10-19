@@ -334,6 +334,8 @@ details.filters .sec { margin-top: 10px; }
 .tag.ft { background: color-mix(in srgb, var(--sky) 24%, transparent); }
 .unmark { border: 0; background: var(--wash-2); border-radius: 999px; padding: 5px 10px; font-size: 12px; font-weight: 600; flex: none; }
 .unmark:hover { background: color-mix(in srgb, var(--ember) 22%, transparent); }
+.rows.flash { animation: flash 1.4s var(--soft); border-radius: 14px; }
+@keyframes flash { 0%, 40% { box-shadow: 0 0 0 3px var(--ember), 0 0 30px color-mix(in srgb, var(--magenta) 40%, transparent); } 100% { box-shadow: 0 0 0 0 transparent; } }
 .job.leaving, .brow.leaving { animation: leave .45s var(--soft) forwards; }
 @keyframes leave { to { opacity: 0; transform: translateX(24px) scale(.97); filter: blur(4px); } }
 .when button[data-val="off"] { grid-column: span 1; }
@@ -518,7 +520,7 @@ async function unpackSnapshot() {
 
 /* ---------------- state ---------------- */
 let JOBS = [], STATUS = null, loaded = false;
-const blank = () => ({ keywords: [], categories: [], states: [], remoteOnly: false, kind: "Internship", level: "", season: "", offCycle: false, cycle: [], weeksBand: "", termConfirmed: false, degree: "", needsVisa: false, minHourlyPay: 0, paidOnly: false, payPostedOnly: false, companies: [], postedWithinDays: 0 });
+const blank = () => ({ keywords: [], exclude: [], excludeCategories: [], industries: [], boost: [], categories: [], states: [], remoteOnly: false, kind: "Internship", level: "", season: "", offCycle: false, cycle: [], weeksBand: "", termConfirmed: false, degree: "", needsVisa: false, minHourlyPay: 0, paidOnly: false, payPostedOnly: false, companies: [], postedWithinDays: 0 });
 /* view-only settings that never go to the server */
 const V = { q: "", sort: "new", strongOnly: false, hideApplied: store.get("is-hide-applied", true) };
 let applied = new Set(store.get("is-applied", []));
@@ -567,14 +569,57 @@ function termBlock(j) {
   const src = t.source === "description" ? `<span class="confirmed" tabindex="0" title="From the job description: “${esc(t.evidence || "")}”">✓ confirmed in description</span>` : t.source === "list" ? `<span class="srcnote">per community list</span>` : t.source === "title" ? `<span class="srcnote">from the title</span>` : "";
   return `<div class="termline${j.offCycle ? " off" : ""}">${calSvg}<span><b>${esc(line || kinds.join(" · "))}</b>${line && kinds.length ? " · " + esc(kinds.join(" · ")) : ""}</span>${src}</div>${t.source === "description" && t.evidence ? `<div class="evidence">“${esc(t.evidence)}”</div>` : ""}`;
 }
+// Industries, recognized from the employer's name (and a few title words).
+const INDUSTRIES = {
+  "Payments & fintech": { ask: /payments?|fintech|financial technology|merchant services/, re: /\b(stripe|square(?! (?:feet|footage|one|enix))(?<!juniper square)|block(?! island)|paypal|venmo|visa|mastercard|american express|amex|discover|fiserv|global payments|worldpay|fis|jack henry|elavon|adyen|marqeta|affirm|klarna|chime|sofi|plaid|brex|ramp|mercury|toast|clover|payoneer|wex|bill\.com|bill holdings|flywire|nuvei|shift4|paysafe|checkout\.com|ncr|ncr voyix|evertec|aci worldwide|western union|moneygram|green dot|synchrony|coinbase|robinhood|payments?)\b/i },
+  "Communications & telecom": { ask: /communications?|telecom|telecommunications|wireless|broadband|cable/, re: /\b(at&t|att|verizon|t-mobile|tmobile|comcast|charter|spectrum|cox|lumen|centurylink|frontier|altice|dish|echostar|ericsson|nokia|cisco|motorola|zoom|twilio|ringcentral|bandwidth|vonage|five9|8x8|sinch|crown castle|american tower|windstream|viasat|iridium|ciena|juniper|arista|corning|commscope|cogent|zayo|us cellular|uscellular|tds|communications|telecom)\b/i },
+  "Banking & finance": { ask: /\bbank|banking|financial services|investment|asset management|wealth/, re: /\b(jpmorgan|jp morgan|chase|bank of america|wells fargo|citi|citigroup|goldman|morgan stanley|truist|pnc|us bank|u\.s\. bank|capital one|td bank|regions|fifth third|keybank|citizens|huntington|ally|schwab|fidelity|vanguard|blackrock|state street|northern trust|bny|raymond james|edward jones|ameriprise|point72|citadel|jane street|two sigma|bank)\b/i },
+  "Healthcare": { ask: /health ?care|hospital|medical|clinical/, re: /\b(health|healthcare|hospital|medical|clinic|kaiser|unitedhealth|optum|cvs|aetna|cigna|humana|elevance|anthem|centene|molina|hca|mayo|epic systems|cerner|labcorp|quest diagnostics|medtronic|stryker|boston scientific|abbott|baxter)\b/i },
+  "Pharma & biotech": { ask: /pharma|biotech|life sciences/, re: /\b(pfizer|merck|johnson & johnson|abbvie|bristol|lilly|amgen|gilead|genentech|roche|novartis|regeneron|vertex|moderna|biogen|astrazeneca|gsk|sanofi|takeda|bayer|novo nordisk|illumina|thermo fisher|danaher|iqvia|ginkgo|pharma\w*|therapeutics|biosciences)\b/i },
+  "Insurance": { ask: /insurance|insurtech/, re: /\b(insurance|state farm|allstate|progressive|geico|liberty mutual|nationwide|travelers|chubb|aflac|metlife|prudential|lincoln financial|hartford|usaa|farmers|lemonade)\b/i },
+  "Retail & e-commerce": { ask: /retail|e-?commerce|consumer goods|\bcpg\b/, re: /\b(amazon|walmart|target|costco|home depot|lowe's|lowes|best buy|kroger|macy's|macys|nordstrom|gap|nike|wayfair|etsy|ebay|chewy|instacart|doordash|shopify|ulta|sephora|tjx|dollar general|publix|albertsons|procter|unilever|pepsico|coca-cola|kraft)\b/i },
+  "Aerospace & defense": { ask: /aerospace|defen[sc]e|space industry/, re: /\b(lockheed|boeing|northrop|raytheon|rtx|general dynamics|l3harris|bae systems|leidos|saic|booz allen|caci|anduril|spacex|blue origin|textron|collins aerospace|pratt|gulfstream|rocket lab|relativity|sierra space|huntington ingalls|aerospace|defense)\b/i },
+  "Consulting": { ask: /consulting|consultancy|advisory/, re: /\b(deloitte|pwc|pricewaterhouse|ey|ernst|kpmg|accenture|mckinsey|bain|boston consulting|bcg|oliver wyman|capgemini|cognizant|infosys|slalom|guidehouse|protiviti|grant thornton|rsm|crowe|consulting)\b/i },
+  "Energy & utilities": { ask: /energy|utilit(y|ies)|oil and gas|renewable/, re: /\b(energy|power|electric|utilities|exxon|chevron|shell|bp|conocophillips|duke energy|southern company|georgia power|nextera|dominion|xcel|entergy|constellation|vistra|aes)\b/i },
+  "Automotive": { ask: /automotive|auto industry|\bev\b|electric vehicles?/, re: /\b(ford|general motors|gm|tesla|rivian|lucid|toyota|honda|hyundai|kia|nissan|stellantis|bmw|mercedes|volkswagen|cummins|aptiv|borgwarner|lear|waymo|cruise|nuro|zoox|automotive)\b/i },
+  "Media & entertainment": { ask: /media|entertainment|streaming|publishing|gaming|video games/, re: /\b(disney|netflix|warner|paramount|nbcuniversal|sony|spotify|roblox|epic games|riot|electronic arts|activision|take-two|nintendo|fox|iheart|new york times|conde nast|tiktok|bytedance|youtube|media|entertainment|games)\b/i },
+  "Government & public sector": { ask: /government|public sector|federal|state agency/, re: /\b(department of|county|city of|state of|federal|agency|usajobs|national laboratory|national lab|public schools)\b/i },
+  "Education": { ask: /education|edtech|school district/, re: /\b(university|college|school|education|coursera|chegg|2u|instructure|pearson|mcgraw|duolingo|khan academy)\b/i },
+};
+const industryOf = (j) => j._ind || (j._ind = Object.entries(INDUSTRIES).filter(([, d]) => d.re.test(j.company) || d.re.test(j.title)).map(([k]) => k));
+// Things people say they don't want, and how to spot them in a job title.
+const EXCLUSIONS = {
+  ai: { label: "AI / machine learning roles", re: /\b(ai|a\.i\.|ml|machine learning|artificial intelligence|llms?|gen ?ai|generative|deep learning|nlp|computer vision|neural)\b/i },
+  engineering: { label: "engineering roles", re: /\b(engineer\w*|swe|devops|sre|firmware|hardware)\b/i, cats: ["Software Engineering", "Hardware"] },
+  coding: { label: "coding-heavy roles", re: /\b(software|developer|programmer|swe|full[- ]?stack|back[- ]?end|front[- ]?end|devops)\b/i, cats: ["Software Engineering"] },
+  sales: { label: "sales roles", re: /\b(sales|account executive|sdr|bdr|business development representative)\b/i },
+  travel: { label: "roles with heavy travel", re: /\btravel\w*\b/i },
+  research: { label: "research roles", re: /\bresearch\w*\b/i },
+};
+const escRx = (k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const excludedBy = (j, f) => (f.exclude || []).some((k) => (EXCLUSIONS[k]?.re || new RegExp(`\\b${escRx(k)}`, "i")).test(j.title))
+  || (f.excludeCategories || []).includes(j.category);
+// How many of the person's extra wishes (skills, industries) a job hits.
+function relevance(j, f = F) {
+  let r = 0;
+  const hay = (j.title + " " + j.company).toLowerCase();
+  for (const b of f.boost || []) if (b !== "senior" && hay.includes(b)) r += 2;
+  const ind = industryOf(j);
+  for (const i of f.industries || []) if (ind.includes(i)) r += 3;
+  if ((f.boost || []).includes("senior") && /Senior|Leadership/.test(j.level || "")) r += 2;
+  return r;
+}
 function matches(j, f = F, skip) {
   if (skip !== "pay" && !payOk(j, f)) return false;
   if (j.direct === false) return false; // only employer-hosted applications
   const hay = (j.title + " " + j.company).toLowerCase();
   if (f.keywords.length && !f.keywords.some((k) => hay.includes(k.toLowerCase()))) return false;
   if (skip !== "categories" && f.categories.length && !f.categories.includes(j.category)) return false;
+  if ((f.exclude?.length || f.excludeCategories?.length) && excludedBy(j, f)) return false;
+  if (skip !== "industry" && f.industries?.length && !industryOf(j).some((i) => f.industries.includes(i))) return false;
+  // "Atlanta or remote": with places picked, Remote widens the search instead of narrowing it
   if (skip !== "states" && f.states.length && !j.states.some((s) => f.states.includes(s)) && !(f.remoteOnly && j.remote)) return false;
-  if (skip !== "remote" && f.remoteOnly && !j.remote) return false;
+  if (skip !== "remote" && f.remoteOnly && !f.states.length && !j.remote) return false;
   if (skip !== "season" && f.season && !j.seasons.some((s) => seasonMatch(f.season, s))) return false;
   if (skip !== "kind" && f.kind && (j.kind || "Internship") !== f.kind) return false;
   if (skip !== "level" && f.level && (j.kind !== "Full-time" || (j.level || "Early career") !== f.level)) return false;
@@ -622,6 +667,8 @@ function describeRest(f) {
   if (f.remoteOnly) s += where.length ? " or remote" : ", remote";
   if (f.season) s += `, ${f.season}`;
   if (f.level) s += `, ${f.level.toLowerCase()}`;
+  if (f.industries?.length) s += ` in ${f.industries.join(" or ").toLowerCase()}`;
+  if (f.exclude?.length) s += `, no ${f.exclude.map((k) => EXCLUSIONS[k]?.label || k).join(" or ")}`;
   if (f.offCycle) s += ", off-cycle";
   if (f.cycle?.length) s += `, ${f.cycle.join(" or ").toLowerCase()}`;
   if (f.weeksBand) s += `, ${WEEK_BANDS[f.weeksBand][2]}`;
@@ -636,6 +683,9 @@ function describeRest(f) {
 }
 function fitsLine(j) {
   const r = [];
+  const ind = industryOf(j).filter((i) => (F.industries || []).includes(i));
+  if (ind.length) r.push(ind[0].toLowerCase());
+  for (const b of (F.boost || []).filter((b) => b !== "senior")) if ((j.title + " " + j.company).toLowerCase().includes(b)) r.push(`mentions “${b}”`);
   if (F.categories.includes(j.category)) r.push(j.category);
   const st = j.states.filter((s) => F.states.includes(s));
   if (st.length) r.push("in " + STATE_NAMES[st[0]]);
@@ -869,7 +919,16 @@ function resultsCard(before, after, list) {
 thread.addEventListener("click", (e) => {
   const r = e.target.closest("[data-react]");
   if (r && !r.disabled && !busy) { if (r.dataset.react === "love") burst(r); return react(r.dataset.react, r); }
-  if (e.target.closest("[data-open-board]")) return openBoard(true);
+  if (e.target.closest("[data-open-board]")) {
+    openBoard(true); setTab("matches");
+    requestAnimationFrame(() => {
+      const rows = document.querySelector("#bbody .rows");
+      if (!rows) return;
+      rows.closest(".sec").scrollIntoView({ behavior: RM.matches ? "auto" : "smooth", block: "start" });
+      rows.classList.remove("flash"); void rows.offsetWidth; rows.classList.add("flash");
+    });
+    return;
+  }
 });
 
 /* ---------------- the next question (one at a time) ---------------- */
@@ -935,11 +994,36 @@ async function present({ echo = "", lead = "", before }) {
   $("#title").textContent = describe();
   renderBoard();
   if (!after) {
+    // Relax the softest details first until something fits, then say what changed.
+    const steps = [
+      ["the industry (it still ranks matches higher)", (f) => ({ boost: [...new Set([...(f.boost || []), ...(f.industries || []).map((i) => i.split(" ")[0].toLowerCase())])], industries: [] }), (f) => f.industries?.length],
+      ["the exact keywords", () => ({ keywords: [] }), (f) => f.keywords.length],
+      ["the experience level", () => ({ level: "" }), (f) => f.level],
+      ["the term", () => ({ season: "", cycle: [], offCycle: false }), (f) => f.season || f.cycle.length || f.offCycle],
+      ["the pay minimum", () => ({ minHourlyPay: 0, payPostedOnly: false }), (f) => f.minHourlyPay || f.payPostedOnly],
+      ["the posting date", () => ({ postedWithinDays: 0 }), (f) => f.postedWithinDays],
+      ["the location (remote roles count too)", (f) => ({ remoteOnly: true }), (f) => f.states.length && !f.remoteOnly],
+      ["the location", () => ({ states: [], remoteOnly: false }), (f) => f.states.length || f.remoteOnly],
+      ["the company", () => ({ companies: [] }), (f) => f.companies.length],
+    ];
+    const relaxed = [];
+    for (const [label, patch, applies] of steps) {
+      if (!applies(F)) continue;
+      Object.assign(F, patch(F)); relaxed.push(label);
+      if (results().length) break;
+    }
+    const list2 = ordered(results());
+    if (list2.length) {
+      $("#title").textContent = describe(); renderBoard();
+      const nq = nextQuestion(list2);
+      return scout({ echo, lines: [lead, `Nothing matched every detail, so I relaxed ${relaxed.join(", then ")}. Here are the ${plural(list2.length, "closest match", "closest matches")}, best first.`],
+        render: () => resultsCard(before ?? JOBS.length, list2.length, list2), question: nq.q, chips: nq.chips });
+    }
     const loosen = looseners();
     return scout({ echo, lines: [lead, "Nothing fits all of that right now. That's today's market, not you. Want me to loosen one thing?"], chips: loosen.length ? loosen : [{ label: "Start a new search", run: reset }] });
   }
   const t = today(list);
-  const summary = `${plural(after, "internship")} ${after === 1 ? "fits" : "fit"}${t ? `, and ${t} went up in the last day` : ""}.`;
+  const summary = `${plural(after, F.kind === "Full-time" ? "job" : F.kind ? "internship" : "role")} ${after === 1 ? "fits" : "fit"}${t ? `, and ${t} went up in the last day` : ""}.`;
   const nq = nextQuestion(list);
   await scout({ echo, lines: [lead, summary], render: () => resultsCard(before ?? JOBS.length, after, list), question: nq.q, chips: nq.chips,
     after: () => { if (firstResults) { firstResults = false; milestone("Your first matches are in"); openBoardOnce(); } } });
@@ -962,6 +1046,8 @@ function looseners() {
   if (F.categories.length) tryDrop("Any role", { categories: [] });
   if (F.companies.length) tryDrop("Any company", { companies: [] });
   if (F.keywords.length) tryDrop("Drop the keywords", { keywords: [] });
+  if (F.industries?.length) tryDrop("Any industry", { industries: [] });
+  if (F.exclude?.length) tryDrop("Allow excluded roles", { exclude: [], excludeCategories: [] });
   return opts.sort((a, b) => b.count - a.count).slice(0, 4);
 }
 
@@ -975,35 +1061,78 @@ async function refine(userText, patch, lead) {
   await present({ lead, before });
 }
 
-const CITY_STATE = { "san francisco": "CA", "bay area": "CA", "los angeles": "CA", "san diego": "CA", "san jose": "CA", "palo alto": "CA", "new york": "NY", "nyc": "NY", "seattle": "WA", "austin": "TX", "dallas": "TX", "houston": "TX", "boston": "MA", "chicago": "IL", "denver": "CO", "atlanta": "GA", "miami": "FL", "pittsburgh": "PA", "philadelphia": "PA", "washington dc": "DC", "dc": "DC" };
+const CITY_STATE = { "san francisco": "CA", "bay area": "CA", "silicon valley": "CA", "los angeles": "CA", "socal": "CA", "norcal": "CA", "san diego": "CA", "san jose": "CA", "palo alto": "CA", "sf": "CA", "la": "CA",
+  "new york": "NY", "nyc": "NY", "manhattan": "NY", "brooklyn": "NY", "seattle": "WA", "austin": "TX", "atx": "TX", "dallas": "TX", "dfw": "TX", "houston": "TX", "san antonio": "TX",
+  "boston": "MA", "chicago": "IL", "denver": "CO", "atlanta": "GA", "atl": "GA", "miami": "FL", "tampa": "FL", "orlando": "FL", "pittsburgh": "PA", "philadelphia": "PA", "philly": "PA",
+  "washington dc": "DC", "dc": "DC", "dmv": "DC", "nova": "VA", "northern virginia": "VA", "charlotte": "NC", "raleigh": "NC", "research triangle": "NC", "nashville": "TN", "phoenix": "AZ", "phx": "AZ",
+  "minneapolis": "MN", "twin cities": "MN", "detroit": "MI", "salt lake": "UT", "portland": "OR", "columbus": "OH", "cleveland": "OH", "st. louis": "MO", "st louis": "MO", "kansas city": "MO", "new orleans": "LA", "nola": "LA" };
+const METRO_EXTRA = { DC: ["VA", "MD"] };
+// Skill and topic phrases worth ranking by (they rarely appear verbatim in titles, so they rank, never filter).
+const BOOST_PHRASES = ["product strategy", "roadmap", "lifecycle", "go-to-market", "gtm", "pricing", "growth", "platform", "api", "b2b", "saas", "payments", "fintech", "analytics", "insights", "experimentation", "data", "operations", "strategy", "partnerships", "monetization", "risk", "compliance", "supply chain", "marketing", "brand", "customer", "commerce", "mobile", "cloud", "security", "infrastructure", "enterprise", "consumer", "healthcare", "telecom", "communications", "network", "billing", "fraud", "lending", "cards", "merchant", "statistics", "actuarial", "forecasting", "modeling", "economics", "research", "quantitative", "excel", "sql", "tableau", "python"];
+const NEG = /\b(?:no|without|don'?t (?:have|want|need)|do not (?:have|want|need)|not (?:interested in|into|looking for)|non|zero|lack(?:ing)?|avoid|exclud(?:e|ing)|except|other than|nothing (?:with|in|related to)|not)\s+(?:any\s+|prior\s+|much\s+|an?\s+)?((?:[a-z/&+.-]+\s?){1,3}?)(?=\s*(?:experience|background|roles?|jobs?|internships?|positions?|skills?|required|requirements?|needed|related|work|field|stuff|knowledge)\b|[,.;!?]|$)/gi;
+const NEG_SKIP = /^(remote|summer|in-?person|on-?site|full-?time|part-?time|sure|too|very|just|only|a lot|much|more|less|the|that|this|it|really|be|been|in|on|at|for|to)$/;
+function negations(m) {
+  const exclude = new Set(), cats = new Set(), spans = [];
+  for (const x of m.matchAll(NEG)) {
+    const term = x[1].trim().replace(/\s+(?:and|or|but)$/, "");
+    if (!term || NEG_SKIP.test(term)) continue;
+    spans.push(x[0]);
+    if (/\b(ai|a\.i\.|ml|machine learning|artificial intelligence|llms?|gen ?ai|generative)\b/.test(term)) exclude.add("ai");
+    else if (/engineer/.test(term)) { exclude.add("engineering"); EXCLUSIONS.engineering.cats.forEach((c) => cats.add(c)); }
+    else if (/\b(cod(e|ing)|programming|software|developer)\b/.test(term)) { exclude.add("coding"); cats.add("Software Engineering"); }
+    else if (/\bsales\b/.test(term)) exclude.add("sales");
+    else if (/\btravel/.test(term)) exclude.add("travel");
+    else if (/\bresearch/.test(term)) exclude.add("research");
+    else { const w = term.split(" ").filter((t) => t.length > 2 && !/^(experience|background|any|prior)$/.test(t)).pop(); if (w) exclude.add(w); }
+  }
+  // remove the negated phrases so "no AI" doesn't also count as wanting AI
+  let rest = m;
+  for (const sp of spans) rest = rest.replace(sp, " ");
+  return { exclude: [...exclude], cats: [...cats], rest };
+}
 function localFilters(message, current) {
-  const m = message.toLowerCase();
-  const base = /start over|new search|instead|forget|reset/.test(m) ? blank() : current;
+  const full = message.toLowerCase().replace(/[’']/g, "'");
+  const base = /start over|new search|instead|forget|reset/.test(full) ? blank() : { ...blank(), ...current };
+  const neg = negations(full);
+  const m = neg.rest;
   const states = new Set();
-  for (const [abbr, name] of Object.entries(STATE_NAMES)) if (abbr !== "DC" && (m.includes(name.toLowerCase()) || new RegExp(`\\b${abbr}\\b`).test(message))) states.add(abbr);
-  for (const [city, abbr] of Object.entries(CITY_STATE)) if (new RegExp(`\\b${city}\\b`).test(m)) states.add(abbr);
+  for (const [abbr, name] of Object.entries(STATE_NAMES)) if (abbr !== "DC" && abbr !== "LA" && abbr !== "IN" && abbr !== "OR" && abbr !== "ME" && (m.includes(name.toLowerCase()) || new RegExp(`\\b${abbr}\\b`).test(message.replace(/\b(I|OR|IN|ME|LA)\b/g, "")))) states.add(abbr);
+  for (const [city, abbr] of Object.entries(CITY_STATE)) if (new RegExp(`\\b${city.replace(".", "\\.")}\\b`).test(m)) { states.add(abbr); (METRO_EXTRA[abbr] || []).forEach((x) => states.add(x)); }
   const cats = new Set();
-  if (/software|swe|developer|coding|backend|frontend|full.?stack/.test(m)) cats.add("Software Engineering");
+  if (/software|swe\b|developer|coding|backend|frontend|full.?stack/.test(m)) cats.add("Software Engineering");
   if (/\bml\b|machine learning|\bai\b|data scien/.test(m)) cats.add("AI & Data Science");
-  if (/analyst|analytics/.test(m)) cats.add("Data & Analytics");
-  if (/product/.test(m)) cats.add("Product");
-  if (/design|ux/.test(m)) cats.add("Design");
-  if (/hardware|electrical|mechanical|chip|semiconductor/.test(m)) cats.add("Hardware");
-  if (/quant|trading/.test(m)) cats.add("Quant & Finance");
-  if (/research/.test(m)) cats.add("Research");
+  if (/\banalyst|analytics|statistic|actuar/.test(m)) cats.add("Data & Analytics");
+  if (/product (manag|owner|lead|strategy|roles?|jobs?|positions?|team)|\bpm\b|program manag|project manag/.test(m)) cats.add("Product");
+  if (/\bdesign|\bux\b/.test(m)) cats.add("Design");
+  if (/hardware|electrical eng|mechanical eng|chip|semiconductor/.test(m)) cats.add("Hardware");
+  if (/\bquant|trading/.test(m)) cats.add("Quant & Finance");
+  if (/\bresearch(er)? (role|position|intern)/.test(m)) cats.add("Research");
+  if (/marketing/.test(m)) cats.add("Marketing");
+  for (const c of neg.cats) cats.delete(c);
+  const industries = Object.entries(INDUSTRIES).filter(([, d]) => d.ask.test(m)).map(([k]) => k);
+  const boost = BOOST_PHRASES.filter((b) => m.includes(b) && !industries.some((i) => i.toLowerCase().includes(b)));
+  for (const [re, phrase] of [[/product manag/, "product manag"], [/program manag/, "program manag"], [/project manag/, "project manag"], [/data analy/, "data analy"], [/business analy/, "business analy"], [/data scien/, "data scien"]]) if (re.test(m)) boost.unshift(phrase);
+  const yrs = m.match(/(\d{1,2})\s*\+?\s*(?:years?|yrs?)/);
+  const years = yrs ? Number(yrs[1]) : 0;
+  if (years >= 5) boost.push("senior");
   const s = m.match(/\b(summer|fall|spring|winter)\b(?:\s*(20\d\d))?/);
-  const degree = /ph\.?d|doctoral/.test(m) ? "PhD" : /\bmba\b/.test(m) ? "MBA" : /master|grad school/.test(m) ? "Master's" : /undergrad|bachelor|freshman|sophomore|junior/.test(m) ? "Bachelor's" : "";
-  const company = [...new Set(JOBS.map((j) => j.company))].filter((c) => c.length > 2 && new RegExp(`\\b${c.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(m));
+  const degree = /ph\.?d|doctoral/.test(m) ? "PhD" : /\bmba\b/.test(m) ? "MBA" : /master'?s|grad school/.test(m) ? "Master's" : /undergrad|bachelor|freshman|sophomore/.test(m) ? "Bachelor's" : "";
+  const company = [...new Set(JOBS.map((j) => j.company))].filter((c) => c.length > 3 && new RegExp(`\\b${c.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(m));
   const anywhere = /anywhere|any (state|location|city)/.test(m);
+  const wantsFull = (/full[- ]?time|new ?grad|entry[- ]level|after (i )?graduat|first job|senior|experienced|director|mid[- ]level|\broles?\b|\bpositions?\b|\bjobs?\b|\bmanager\b|\bcareers?\b/.test(m) || years >= 1) && !/\bintern|co-?op/.test(m);
   return {
     reply: "", keywords: base.keywords,
-    categories: cats.size ? [...cats] : base.categories,
+    exclude: [...new Set([...(base.exclude || []), ...neg.exclude])],
+    excludeCategories: [...new Set([...(base.excludeCategories || []), ...neg.cats])],
+    industries: industries.length ? industries : base.industries || [],
+    boost: [...new Set([...(base.boost || []), ...boost])],
+    categories: cats.size ? [...cats] : base.categories.filter((c) => !neg.cats.includes(c)),
     states: anywhere ? [] : states.size ? [...states] : base.states,
     remoteOnly: /not remote|in.?person|on.?site/.test(m) ? false : /remote/.test(m) || (!anywhere && base.remoteOnly),
     season: s ? s[0].replace(/^\w/, (c) => c.toUpperCase()) : /any (time|season)/.test(m) ? "" : base.season,
-    level: /new ?grad|entry[- ]level|junior|first job/.test(m) ? "Early career" : /director|head of|\bvp\b|vice president|principal|leadership/.test(m) ? "Leadership" : /senior|\bsr\b/.test(m) ? "Senior" : /mid[- ]level/.test(m) ? "Mid-level" : base.level || "",
-    kind: /full[- ]?time|new ?grad|entry[- ]level|after (i )?graduat|first job|senior|experienced|director|mid[- ]level/.test(m) && !/\bintern/.test(m) ? "Full-time" : /\bintern(ship)?s?\b|co-?op/.test(m) ? "Internship" : /both|either/.test(m) ? "" : base.kind ?? "Internship",
-    offCycle: /off[- ]?(cycle|season)|not (in )?(the )?summer|non[- ]summer|outside (of )?(the )?summer/.test(m) || (!/any (term|season|time)/.test(m) && base.offCycle),
+    level: /new ?grad|entry[- ]level|junior|first job/.test(m) || (years && years <= 2) ? "Early career" : /director|head of|\bvp\b|vice president|principal|leadership/.test(m) ? "Leadership" : /\bsenior\b|\bsr\b/.test(m) ? "Senior" : /mid[- ]level/.test(m) ? "Mid-level" : base.level || "",
+    kind: wantsFull ? "Full-time" : /\bintern(ship)?s?\b|co-?op/.test(m) ? "Internship" : /both|either/.test(m) ? "" : base.kind ?? "Internship",
+    offCycle: /off[- ]?(cycle|season)|not (in )?(the )?summer|non[- ]summer|outside (of )?(the )?summer/.test(full) || (!/any (term|season|time)/.test(m) && base.offCycle),
     cycle: /any (term|season|time)/.test(m) ? [] : [...new Set([...(base.cycle || []), ...(/\bco-?ops?\b/.test(m) ? ["Co-op"] : []), ...(/part[- ]time|during (the )?(school|semester)|while (in|at) school/.test(m) ? ["Part-time"] : []), ...(/year[- ]round/.test(m) ? ["Year-round"] : []), ...(/\bcontract|temporary|freelance/.test(m) ? ["Contract"] : [])])],
     weeksBand: base.weeksBand || "", termConfirmed: /confirmed|verified dates/.test(m) || base.termConfirmed || false,
     degree: degree || base.degree,
@@ -1022,7 +1151,7 @@ async function ask(text) {
   let r;
   try {
     r = await withThinking(["Listening", "Reading the listings", "Sorting what fits"], async () => {
-      if (SNAP) return localFilters(text, F);
+      if (SNAP || !STATUS?.ai) return localFilters(text, F);
       const res = await fetch("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: text, current: F }) });
       if (!res.ok) throw new Error(res.status); return res.json();
     }, 1200);
@@ -1181,6 +1310,9 @@ function renderBoard() {
       const lvBase = JOBS.filter((j) => j.kind === "Full-time" && matches(j, F, "level"));
       fx += facet("Experience level", ["Early career", "Mid-level", "Senior", "Leadership"].map((lv) => fb(lv, lvBase.filter((j) => (j.level || "Early career") === lv).length, F.level === lv, `data-facet="level" data-val="${lv}"`)));
     }
+    const indBase = JOBS.filter((j) => matches(j, F, "industry"));
+    const indCounts = Object.keys(INDUSTRIES).map((k) => [k, indBase.filter((j) => industryOf(j).includes(k)).length]).filter(([, n]) => n).sort((a, b) => b[1] - a[1]);
+    fx += facet("Industry", indCounts.map(([k, n]) => fb(k, n, (F.industries || []).includes(k), `data-facet="industries" data-val="${esc(k)}"`)));
     fx += facet("Role", tally(JOBS.filter((j) => matches(j, F, "categories")), "category").map(([c, n]) => fb(c, n, F.categories.includes(c), `data-facet="categories" data-val="${esc(c)}"`)));
     const whereBase = JOBS.filter((j) => matches(j, F, "states"));
     fx += facet("Where", [fb("Remote", whereBase.filter((j) => j.remote).length, F.remoteOnly, 'data-facet="remoteOnly"'), ...tally(whereBase, "states").slice(0, 20).map(([s, n]) => fb(STATE_NAMES[s] || s, n, F.states.includes(s), `data-facet="states" data-val="${s}"`))]);
@@ -1388,7 +1520,15 @@ function profileFromText(text) {
   const gradYear = gradM ? +gradM[1] : years.length ? Math.max(...years) : 0;
   const states = [...new Set([...t.matchAll(/,\s*([A-Z]{2})\s+\d{5}/g)].map((m) => m[1]).filter((s) => STATE_NAMES[s]))];
   const major = (t.match(/(?:B\.?S\.?|B\.?A\.?|Bachelor of (?:Science|Arts)|M\.?S\.?|Master of Science)\s*(?:in|,)?\s+([A-Z][A-Za-z&]+(?: [A-Z&][A-Za-z&]+){0,3})/) || [])[1] || "";
-  return { name: "", skills, areas, categories, degree, major, gradYear, states, roles: [], summary: "" };
+  // Field of study shapes what "close to my resume" means: math, statistics and data science
+  // students want analytics, data, quant and research roles, not engineering ones.
+  const fieldText = (major + " " + t.slice(0, 2500)).toLowerCase();
+  const focus = /\b(mathematics|math\b|applied math|statistics|data science|actuarial|econometrics|operations research)\b/.test(fieldText) ? "analytics"
+    : /\b(computer science|software engineering|computer engineering)\b/.test(fieldText) ? "software"
+    : /\b(mechanical|electrical|civil|aerospace|chemical|industrial) engineering\b/.test(fieldText) ? "engineering"
+    : /\b(finance|economics|accounting|business administration|marketing)\b/.test(fieldText) ? "business" : "";
+  if (focus === "analytics") categories.splice(0, categories.length, ...new Set(["Data & Analytics", "AI & Data Science", "Quant & Finance", ...categories.filter((c) => c !== "Software Engineering" && c !== "Hardware")]));
+  return { name: "", skills, areas, categories, degree, major, gradYear, states, focus, roles: [], summary: "" };
 }
 
 function scoreJob(j, P) {
@@ -1429,6 +1569,13 @@ function scoreJob(j, P) {
   }
   if (P.states?.length && j.states.some((s) => P.states.includes(s))) { score += 6; why.push(`Near you in ${STATE_NAMES[j.states.find((s) => P.states.includes(s))]}`); }
   if (j.pay?.basis === "posted") score += 4;
+  const focus = P.focus || (/\b(math|statistic|data science|actuar)/i.test(P.major || "") ? "analytics" : "");
+  if (focus === "analytics") {
+    const dataTitle = /\b(analyst|analytics|data scien\w*|data|statistic\w*|actuar\w*|quant\w*|insights?|research|econom\w*|risk|modeling|forecast\w*|business intelligence|bi\b|machine learning|decision science)\b/i;
+    if (dataTitle.test(j.title)) { score += 18; why.unshift("Fits your math / data science background"); }
+    if (/\bengineer\w*\b/i.test(j.title) && !/\b(data|analytics|machine learning|ml|ai)\b/i.test(j.title)) score -= 40;
+    if (j.category === "Software Engineering" || j.category === "Hardware") score -= 15;
+  }
   return { score: Math.max(1, Math.min(99, Math.round(score * 0.92))), why: why.slice(0, 3) };
 }
 function rescore() {
@@ -1436,8 +1583,9 @@ function rescore() {
   for (const j of JOBS) { const r = scoreJob(j, PROFILE); j._score = r.score; j._why = r.why; }
 }
 function ordered(list) {
+  if ((F.boost?.length || F.industries?.length) && !PROFILE) return [...list].sort((a, b) => relevance(b) - relevance(a) || (b.postedAt || "").localeCompare(a.postedAt || ""));
   if (!PROFILE) return list;
-  let out = [...list].sort((a, b) => (b._score ?? 0) - (a._score ?? 0) || (b.postedAt || "").localeCompare(a.postedAt || ""));
+  let out = [...list].sort((a, b) => (b._score ?? 0) + relevance(b) * 4 - (a._score ?? 0) - relevance(a) * 4 || (b.postedAt || "").localeCompare(a.postedAt || ""));
   if (V.strongOnly) out = out.filter((j) => (j._score ?? 0) >= 70);
   return out;
 }

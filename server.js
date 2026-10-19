@@ -148,6 +148,8 @@ const NOT_FULLTIME = /\b(part[- ]time|contract(?:or)?|temporary|temp\b|freelance
 // "Internship", "Full-time" or null for everything else.
 function kindOf(title, hint) {
   if (INTERN_RE.test(title)) return "Internship";
+  // "Strategy & Project Management - Summer 2027": a dated summer/fall/spring program is an internship
+  if (/\b(summer|fall|spring|winter)\s+20\d\d\b/i.test(title) && !NEWGRAD_RE.test(title) && !/\bfull[- ]time\b/i.test(title)) return "Internship";
   if (hint) return hint;
   if (NEWGRAD_RE.test(title) && !SENIOR_RE.test(title)) return "Full-time";
   if (!NOT_FULLTIME.test(title) && ACTIVE_FAMILIES.some((re) => re.test(title))) return "Full-time";
