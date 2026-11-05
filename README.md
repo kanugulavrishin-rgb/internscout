@@ -42,6 +42,12 @@ Growing coverage:
 
 Scheduling: boards that have had internships are checked every cycle (10 minutes); quiet boards are rechecked after 1–3 days; closed boards after a week. State lives in `data/boards.json`. Each system has its own request lane and backs off on rate limits.
 
+## Finance coverage
+
+Titles are sorted into six finance fields as well as the tech and business ones: **Investment Banking**, **Quant & Finance** (sales & trading, markets, quant), **Asset Mgmt & PE** (equity research, private equity, wealth, hedge funds), **Corporate Finance** (FP&A, treasury, financial analyst), **Accounting & Audit** and **Risk & Insurance** (risk, compliance, underwriting, actuarial). Full-time finance roles (analyst, associate, rotational programs, accountant, underwriter, trader and so on) are collected at every level, and Workday, Oracle and Google Jobs searches include finance terms such as "summer analyst" and "financial analyst".
+
+`node scripts/add-finance-boards.mjs` looks for the career boards of about 300 banks, boutiques, funds, asset managers, insurers, accounting firms, exchanges and fintechs and adds the ones that exist to `companies.json`. Only whole-name matches are accepted, and Greenhouse boards must report a matching company name.
+
 ## When an internship runs (off-cycle detection)
 
 `lib/terms.js` reads each posting's title and full description and records:
@@ -62,10 +68,14 @@ Descriptions come from each system's detail endpoint and are cached in `data/det
 - **Published**: read from structured pay fields (Greenhouse, Lever, Ashby, USAJobs) or from pay-transparency text in the posting, normalized to dollars per hour.
 - **Estimated**, in order of preference: the same company's other internships with published pay; Claude web research on that company's intern pay (needs `ANTHROPIC_API_KEY`, cached 30 days in `data/research.json`, `RESEARCH_PER_CYCLE` per refresh); similar internships in the same state; similar internships nationwide. Each estimate says what it is based on.
 - Postings that say they're unpaid are marked unpaid.
+- Pay in a posting is read in many forms: `$25/hr`, `$85,000 – $105,000 per year`, `USD 95,000 to 120,000`, `$4,500 per month`, `$1,800 per week`, `$3,000 bi-weekly`, `$8,000 for the summer`, `$60–75k a year`. A period unit right after the amount counts as proof of pay even without a word like "salary", while "$50 million raised" and "$10,000 relocation" are ignored.
+- Cards show posted pay in the unit the employer used; hover for the same amount per hour, week, month and year. Adzuna (with a key) now runs ten finance and early-career queries and keeps only salaries it did not predict.
 
 ## Resume matching
 
 Upload a PDF, Word or text resume (button in the rail, the paperclip, or drag and drop). It's read in the browser; only the derived profile (skills, degree, graduation year, state) is kept, in that browser. With an API key the live server also has Claude read it once (not stored). Every internship gets a match score with reasons.
+
+The resume's field is judged from the degree, coursework and experience, not just the tools listed. A finance or accounting resume ranks banking, markets, asset management, corporate finance, audit and risk roles first; a finance resume that also lists a data-science degree keeps analytics roles as a second lane; a pure data-science resume still ranks analytics first. Software and hardware roles are pushed down for finance resumes. Reasons on each card cite the skills of the role's own field (for example LBO and DCF for banking).
 
 ## Shareable snapshot
 

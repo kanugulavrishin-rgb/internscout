@@ -75,8 +75,21 @@ function parseLocation(raw) {
   return { states: [...states], remote, isUS };
 }
 
+// Finance fields, most specific first. Matched on the title only; engineers and developers at
+// banks stay in Software Engineering (see classify).
+const FINANCE_FIELDS = [
+  ["Quant & Finance", /\bquant|\btrad(?:ing|er)\b|sales (?:and|&) trading|\bs&t\b|market[- ]making|\bmarkets\b|derivatives|structur(?:er|ing)|fixed income|\brates\b|\bfx\b|foreign exchange|commodit|credit trading|electronic trading|\bstrats?\b|strategist|securities lending|prime brokerage/],
+  ["Investment Banking", /investment bank|\bibd\b|\bm&a\b|mergers|leveraged finance|\blevfin\b|restructuring|capital markets|\becm\b|\bdcm\b|equity capital|debt capital|banking (?:analyst|associate|summer|intern|division)|coverage (?:analyst|group)|financial advisory|transaction advisory|financial sponsors|healthcare banking|tmt banking|energy banking|industrials banking|real estate banking|global banking|corporate banking|commercial banking|middle market banking|relationship (?:banker|associate)/],
+  ["Asset Mgmt & PE", /private equity|venture capital|\bvc\b|asset management|wealth|portfolio (?:analyst|associate|management)|investment (?:analyst|research|management|associate|strategy|team|professional|solutions)|equity research|research analyst|credit (?:analyst|research)|private credit|hedge fund|\bfunds?\b|family office|endowment|real estate (?:investment|finance|acquisitions|private equity)|acquisitions|alternatives|infrastructure invest|financial advis|investment consult|asset servic|trust officer|private bank|private client|fiduciary|investment services|\bpb\b/],
+  ["Accounting & Audit", /\baudit|assurance|attest|\btax\b|accounting|accountant|\bcpa\b|controller|forensic|bookkeep|payroll|financial reporting|\bgaap\b|\bsox\b|accounts (?:payable|receivable)/],
+  ["Risk & Insurance", /\brisk\b|compliance|\baml\b|\bkyc\b|financial crimes|fraud|underwrit|actuar|insurance|claims|regulatory|model validation|surveillance/],
+  ["Corporate Finance", /financial (?:analyst|planning|management|reporting|operations)|chief financial|\bcfo\b|credit (?:and|&) collections|collections analyst|\bfp&a\b|fp and a|finance|corporate finance|treasury|budget|cost analyst|pricing analyst|lending|loan|mortgage|capital planning|\bbanking\b|\bbank\b/],
+];
 function classify(title) {
   const t = title.toLowerCase();
+  const engineering = /software|engineer|developer|\bswe\b|backend|frontend|full.?stack|infrastructure|security|mobile|\bios\b|android|devops|\bsre\b|architect|\bqa\b/.test(t) && !/\bquant/.test(t) && !/(?:financial|finance|investment|banking|risk|credit)\s+(?:analyst|associate)/.test(t);
+  if (/\bquant\b|\bquantitative\b/.test(t)) return "Quant & Finance";
+  if (!engineering && !/\b(?:machine learning|data scien)/.test(t)) for (const [cat, re] of FINANCE_FIELDS) if (re.test(t)) return cat;
   if (/machine learning|\bml\b|\bai\b|data scien|research scien|applied scien/.test(t)) return "AI & Data Science";
   if (/data (engineer|analyst|analytics)|analytics|business intelligence/.test(t)) return "Data & Analytics";
   if (/software|engineer|developer|swe|backend|frontend|full.?stack|infrastructure|security|mobile|ios|android/.test(t)) return "Software Engineering";
@@ -141,6 +154,7 @@ const FAMILIES = {
   program: /\b((?:technical |senior |principal |lead )?program manager|project manager|project management|scrum master|delivery manager|agile coach|pmo\b|portfolio manager)/i,
   analyst: /\b((?:business|data|financial|finance|operations|strategy|product|marketing|pricing|risk|supply chain|bi|business intelligence) analyst|analytics manager)/i,
   design: /\b((?:product|ux|ui|ux\/ui|interaction|visual|service) designer|ux research(?:er)?|user research(?:er)?|design (?:manager|lead|director)|head of design)/i,
+  finance: /\b((?:financial|finance|investment|credit|equity research|treasury|fp&a|risk|quantitative|portfolio|corporate finance|valuation|audit|tax|accounting|compliance|pricing|underwriting|trading|banking|markets|wealth|asset management|private equity|fund) (?:analyst|associate|accountant|advisor|trader|strategist|officer|specialist)|(?:investment banking|ibd|m&a|leveraged finance|capital markets|restructuring|equity research|sales (?:and|&) trading|private equity|credit risk|market risk|financial planning|fp&a|fp and a|treasury|internal audit|forensic|actuarial|underwriting|corporate banking|commercial banking|wealth management|asset management|portfolio management|quantitative|trading) (?:analyst|associate|assistant|trainee|program|rotational)|fp&a|financial planning (?:and|&) analysis|(?:staff|senior|associate|junior)? ?accountant|cpa\b|controller|actuary|actuarial analyst|underwriter|loan officer|credit officer|relationship manager|trader)/i,
   marketing: /\b(product marketing|marketing manager|growth (?:manager|marketing|lead)|brand manager|content marketing|demand generation|lifecycle marketing|marketing director|head of marketing|go-to-market)/i,
 };
 const ACTIVE_FAMILIES = (process.env.FULLTIME_FAMILIES || Object.keys(FAMILIES).join(",")).split(",").map((f) => FAMILIES[f.trim()]).filter(Boolean);
@@ -319,8 +333,8 @@ async function fromWorkday({ host, tenant, site, company }) {
   const api = `https://${host}/wday/cxs/${tenant}/${site}`;
   const postings = [], seenPaths = new Set();
   // "intern" finds intern/internship; "summer co-op" finds Summer Analyst programs and co-ops.
-  for (const searchText of ["intern", "summer co-op", "new graduate", "entry level", "product manager", "program manager", "analyst"]) {
-    if ((searchText === "summer co-op" || searchText === "new graduate" || searchText === "entry level") && !postings.length) continue; // quiet for students: skip student searches
+  for (const searchText of ["intern", "summer co-op", "summer analyst", "new graduate", "entry level", "product manager", "program manager", "analyst", "financial analyst", "associate"]) {
+    if (["summer co-op", "summer analyst", "new graduate", "entry level"].includes(searchText) && !postings.length) continue; // quiet for students: skip student searches
     for (let offset = 0; offset < 400; offset += 20) {
       const page = await postJSON(`${api}/jobs`, { appliedFacets: {}, limit: 20, offset, searchText });
       for (const p of page.jobPostings || []) if (!seenPaths.has(p.externalPath)) { seenPaths.add(p.externalPath); postings.push(p); }
@@ -397,7 +411,7 @@ async function fromWorkable({ slug, company }) {
 
 async function fromOracle({ host, site, company }) {
   const reqs = new Map();
-  for (const kw of ["intern", "graduate", "entry level", "product manager", "program manager", "analyst"]) {
+  for (const kw of ["intern", "graduate", "summer analyst", "entry level", "product manager", "program manager", "analyst", "financial analyst", "associate"]) {
     const data = await getJSON(`https://${host}/hcmRestApi/resources/latest/recruitingCEJobRequisitions?onlyData=true&expand=requisitionList.secondaryLocations&finder=findReqs;siteNumber=${site},keyword=${encodeURIComponent(kw)},limit=100`);
     for (const r of data.items?.[0]?.requisitionList || []) reqs.set(r.Id, r);
   }
@@ -577,7 +591,9 @@ const GOOGLE_JOBS_FILE = path.join(ROOT, "data", "google-jobs.json");
 const GOOGLE_JOBS_QUERIES = (process.env.JOBS_API_QUERIES || [
   "software engineering intern", "data science intern", "machine learning intern", "product management intern",
   "business analyst intern", "finance intern", "marketing intern", "mechanical engineering intern", "electrical engineering intern",
+  "investment banking summer analyst", "private equity intern", "sales and trading intern", "quantitative trading intern", "equity research intern", "asset management intern", "financial analyst intern", "accounting intern", "audit intern", "tax intern", "risk management intern", "corporate finance intern", "wealth management intern", "insurance underwriting intern", "actuarial intern",
   "co-op", "spring 2027 internship", "fall 2027 internship",
+  "finance rotational program", "entry level financial analyst", "investment banking analyst", "staff accountant", "audit associate", "credit analyst", "fp&a analyst", "treasury analyst", "equity research associate", "underwriter", "relationship manager",
   "new grad software engineer", "entry level analyst", "associate product manager",
   "product manager", "senior product manager", "director of product management", "program manager", "product marketing manager",
 ].join("|")).split("|");
@@ -591,7 +607,7 @@ async function fromGoogleJobs() {
   let rows = cache.rows;
   if (Date.now() - cache.at > interval) {
     rows = [];
-    const budget = Number(process.env.JOBS_API_MAX_REQUESTS || 20);
+    const budget = Number(process.env.JOBS_API_MAX_REQUESTS || 60);
     for (const q of GOOGLE_JOBS_QUERIES.slice(0, budget)) {
       try {
         if (jsKey) {
@@ -656,7 +672,7 @@ async function getJSONCached(url) {
   if (res.headers.get("etag")) etagCache.set(url, { etag: res.headers.get("etag"), data });
   return data;
 }
-const LIST_CATEGORY = { "AI/ML/Data": "AI & Data Science", "Data Science, AI & Machine Learning": "AI & Data Science", "Software": "Software Engineering", "Software Engineering": "Software Engineering", "Hardware": "Hardware", "Hardware Engineering": "Hardware", "Product": "Product", "Product Management": "Product", "Quant": "Quant & Finance" };
+const LIST_CATEGORY = { "AI/ML/Data": "AI & Data Science", "Data Science, AI & Machine Learning": "AI & Data Science", "Software": "Software Engineering", "Software Engineering": "Software Engineering", "Hardware": "Hardware", "Hardware Engineering": "Hardware", "Product": "Product", "Product Management": "Product", "Quant": "Quant & Finance", "Quant & Finance": "Quant & Finance", "Finance": "Corporate Finance", "Finance & Accounting": "Corporate Finance", "Investment Banking": "Investment Banking", "Accounting": "Accounting & Audit", "Consulting": "Business & Ops" };
 async function fromCommunityList(url, label, kind = "Internship") {
   const list = await getJSONCached(url);
   return list.filter((j) => j.active && j.is_visible !== false).map((j) => normalize({
@@ -781,14 +797,28 @@ const COMMUNITY_LISTS = [
 
 // Adzuna (optional key) aggregates job boards; its links are not direct applications,
 // so its listings are hidden in the UI.
+const ADZUNA_QUERIES = [
+  ["intern internship co-op", null], ["summer analyst", null], ["investment banking analyst", null], ["financial analyst", null],
+  ["accounting audit tax intern", null], ["private equity asset management", null], ["sales trading quantitative", null],
+  ["risk compliance underwriting", null], ["new grad entry level", null], ["rotational program graduate", null],
+];
 async function fromAdzuna() {
   const { ADZUNA_APP_ID: id, ADZUNA_APP_KEY: key } = process.env;
   if (!id || !key) return [];
-  const out = [];
-  for (let page = 1; page <= 5; page++) {
-    const q = new URLSearchParams({ app_id: id, app_key: key, what_or: "intern internship", results_per_page: "50", max_days_old: "14", sort_by: "date" });
-    const { results } = await getJSON(`https://api.adzuna.com/v1/api/jobs/us/search/${page}?${q}`);
-    out.push(...results.map((j) => normalize({ source: "adzuna", company: j.company?.display_name || "Unknown", title: j.title?.replace(/<[^>]+>/g, ""), location: j.location?.display_name, url: j.redirect_url, postedAt: j.created })));
+  const out = [], seen = new Set();
+  for (const [what] of ADZUNA_QUERIES) for (let page = 1; page <= 5; page++) {
+    const q = new URLSearchParams({ app_id: id, app_key: key, what_or: what, results_per_page: "50", max_days_old: "30", sort_by: "date" });
+    let results;
+    try { ({ results } = await getJSON(`https://api.adzuna.com/v1/api/jobs/us/search/${page}?${q}`)); } catch { break; }
+    for (const j of results) {
+      if (seen.has(j.id)) continue;
+      seen.add(j.id);
+      const n = normalize({ source: "adzuna", company: j.company?.display_name || "Unknown", title: j.title?.replace(/<[^>]+>/g, ""), location: j.location?.display_name, url: j.redirect_url, postedAt: j.created });
+      if (!n) continue;
+      // Adzuna marks salaries it guessed itself ("predicted"); only real ones count as posted pay.
+      if (!j.salary_is_predicted || String(j.salary_is_predicted) === "0") n.pay = (j.salary_min > 0 && posted(Number(j.salary_min), Number(j.salary_max) || Number(j.salary_min), undefined, "Salary from the job posting.")) || parsePay(j.description || "") || undefined;
+      out.push(n);
+    }
     if (results.length < 50) break;
   }
   return out;
@@ -982,7 +1012,7 @@ function dedupe(list) {
 }
 
 // ---------- AI search: natural language -> filters ----------
-const CATEGORIES = ["Software Engineering", "AI & Data Science", "Data & Analytics", "Product", "Design", "Hardware", "Quant & Finance", "Business & Ops", "Marketing", "Research", "Other"];
+const CATEGORIES = ["Software Engineering", "AI & Data Science", "Data & Analytics", "Product", "Design", "Hardware", "Quant & Finance", "Investment Banking", "Asset Mgmt & PE", "Corporate Finance", "Accounting & Audit", "Risk & Insurance", "Business & Ops", "Marketing", "Research", "Other"];
 const Filters = z.object({
   reply: z.string().describe("One or two friendly sentences describing what you searched for"),
   keywords: z.array(z.string()).describe("Title keywords to match, e.g. ['frontend'] — empty if none"),
@@ -1034,7 +1064,13 @@ function heuristicFilters(message, current = {}) {
   if (/analyst|analytics/.test(m)) categories.add("Data & Analytics");
   if (/product/.test(m)) categories.add("Product");
   if (/design|ux/.test(m)) categories.add("Design");
-  if (/finance|business|ops|strategy/.test(m)) categories.add("Business & Ops");
+  if (/investment bank|\bibd\b|\bm&a\b|mergers|capital markets|leveraged finance|restructuring|summer analyst/.test(m)) categories.add("Investment Banking");
+  if (/\bquant|trading|\btrader|sales (and|&) trading|\bs&t\b|markets|derivatives|fixed income/.test(m)) categories.add("Quant & Finance");
+  if (/private equity|\bpe\b|venture capital|asset management|wealth|hedge fund|equity research|portfolio|investment (analyst|research|management)|credit analyst|real estate (invest|finance)/.test(m)) categories.add("Asset Mgmt & PE");
+  if (/corporate finance|\bfp&a\b|financial analyst|\bfinance\b|treasury|banking/.test(m)) categories.add("Corporate Finance");
+  if (/accounting|\baudit|\btax\b|\bcpa\b|assurance/.test(m)) categories.add("Accounting & Audit");
+  if (/\brisk\b|compliance|insurance|underwrit|actuar|\baml\b|fraud/.test(m)) categories.add("Risk & Insurance");
+  if (/business|\bops\b|operations|strategy|consult/.test(m)) categories.add("Business & Ops");
   if (/marketing/.test(m)) categories.add("Marketing");
   if (/hardware|electrical/.test(m)) categories.add("Hardware");
   const s = m.match(/\b(summer|fall|spring|winter)\b(?:\s*(20\d\d))?/);
@@ -1092,7 +1128,7 @@ async function readResume(text) {
     model: "claude-opus-5-5", max_tokens: 4000,
     betas: ["server-side-fallback-2026-07-01"], fallbacks: "default",
     output_config: { effort: "low", format: zodOutputFormat(Profile) },
-    system: "You read a student's resume and describe what internships they are a strong fit for. Be specific and generous but accurate.",
+    system: "You read a resume and describe which internships and early-career roles the person is a strong fit for. Judge the person's real target field from their coursework, experience, leadership and certifications, not just the tools they list: a finance and accounting student who uses Python and SQL is a finance candidate first. Put the categories they most plausibly want first and include every distinct field their experience supports (for example Investment Banking, Quant & Finance, Asset Mgmt & PE, Corporate Finance, Accounting & Audit, Risk & Insurance, Data & Analytics, Product). In roles, name specific job titles to search for (e.g. 'investment banking summer analyst', 'equity research', 'financial analyst', 'sales and trading', 'product analyst'). Be specific and generous but accurate.",
     messages: [{ role: "user", content: text }],
   });
   if (response.stop_reason === "refusal") return null;

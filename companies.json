@@ -29258,6 +29258,14 @@
   {
    "slug": "ziro",
    "company": "ZIRO"
+  },
+  {
+   "slug": "lincolninternational",
+   "company": "Lincoln International"
+  },
+  {
+   "slug": "hpsinvestmentpartners",
+   "company": "HPS Investment Partners"
   }
  ],
  "lever": [
@@ -125373,6 +125381,36 @@
    "host": "zutari.wd3.myworkdayjobs.com",
    "tenant": "zutari",
    "site": "zutari"
+  },
+  {
+   "host": "lplfinancial.wd1.myworkdayjobs.com",
+   "tenant": "lplfinancial",
+   "site": "External",
+   "company": "LPL Financial"
+  },
+  {
+   "host": "fis.wd5.myworkdayjobs.com",
+   "tenant": "fis",
+   "site": "SearchJobs",
+   "company": "FIS"
+  },
+  {
+   "host": "wellington.wd5.myworkdayjobs.com",
+   "tenant": "wellington",
+   "site": "External",
+   "company": "Wellington Management"
+  },
+  {
+   "host": "blackstone.wd1.myworkdayjobs.com",
+   "tenant": "blackstone",
+   "site": "Blackstone_Careers",
+   "company": "Blackstone"
+  },
+  {
+   "host": "broadridge.wd5.myworkdayjobs.com",
+   "tenant": "broadridge",
+   "site": "Careers",
+   "company": "Broadridge"
   }
  ],
  "oracle": [
@@ -126310,6 +126348,16 @@
    "host": "iazuqy.fa.ocs.oraclecloud.com",
    "site": "CX_1",
    "company": "UCSF"
+  },
+  {
+   "host": "hdpc.fa.us2.oraclecloud.com",
+   "site": "CX_1",
+   "company": "Barclays"
+  },
+  {
+   "host": "jpmc.fa.oraclecloud.com",
+   "site": "CX_1002",
+   "company": "JPMorgan Chase"
   }
  ],
  "icims": [

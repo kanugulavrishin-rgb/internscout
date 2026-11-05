@@ -592,7 +592,7 @@ const fmt = (n) => n.toLocaleString("en-US");
 const plural = (n, a, b = a + "s") => `${fmt(n)} ${n === 1 ? a : b}`;
 
 const STATE_NAMES = { AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California", CO: "Colorado", CT: "Connecticut", DE: "Delaware", DC: "Washington, DC", FL: "Florida", GA: "Georgia", HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa", KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland", MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi", MO: "Missouri", MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New Hampshire", NJ: "New Jersey", NM: "New Mexico", NY: "New York", NC: "North Carolina", ND: "North Dakota", OH: "Ohio", OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina", SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah", VT: "Vermont", VA: "Virginia", WA: "Washington", WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming" };
-const CAT_HUE = { "Software Engineering": "var(--ember)", "AI & Data Science": "var(--violet)", "Data & Analytics": "var(--sky)", "Product": "var(--magenta)", "Design": "var(--gold)", "Hardware": "var(--sea)", "Business & Ops": "#C9A27E", "Marketing": "#FF8FB1", "Research": "#B497FF", "Other": "var(--faint)" };
+const CAT_HUE = { "Software Engineering": "var(--ember)", "AI & Data Science": "var(--violet)", "Data & Analytics": "var(--sky)", "Product": "var(--magenta)", "Design": "var(--gold)", "Hardware": "var(--sea)", "Quant & Finance": "#3FA7A0", "Investment Banking": "#4C78D6", "Asset Mgmt & PE": "#9B7FD8", "Corporate Finance": "#43A56B", "Accounting & Audit": "#C58B3C", "Risk & Insurance": "#D1655A", "Business & Ops": "#C9A27E", "Marketing": "#FF8FB1", "Research": "#B497FF", "Other": "var(--faint)" };
 const MONO = [["#FF7A3D", "#E8418F"], ["#E8418F", "#8B5CF6"], ["#8B5CF6", "#6AB0FF"], ["#FFB25E", "#FF7A3D"], ["#2FB394", "#6AB0FF"], ["#C4507A", "#FFB25E"], ["#7A5CF0", "#E8418F"]];
 const DEGREES = ["Bachelor's", "Master's", "PhD", "MBA"];
 const VISA_BLOCKERS = ["No visa sponsorship", "U.S. citizens only"];
@@ -812,9 +812,21 @@ function degreeTag(j) {
   return `<span class="tag">${esc(d.join(" / "))}</span>`;
 }
 const money = (n) => "$" + (n >= 100 ? Math.round(n) : Math.round(n));
+// Show posted pay in the unit the employer used ($28/hr, $4k/mo, $85k/yr); estimates stay
+// hourly for interns and annual for full-time roles. The tooltip converts to every unit.
+const PER = { hour: 1, week: 40, month: 2080 / 12, year: 2080 };
 function payLabel(p, short, j) {
   if (!p) return "";
   if (p.basis === "unpaid") return "Unpaid";
+  if (p.basis === "posted" && PER[p.period]) {
+    const x = PER[p.period], lo = p.min * x, hi = p.max * x;
+    const f = p.period === "hour" ? (n) => String(Math.round(n * 100) / 100)
+      : p.period === "week" ? (n) => fmt(Math.round(n))
+      : p.period === "month" ? (n) => (n >= 10000 ? (n / 1000).toFixed(1).replace(/\.0$/, "") + "k" : fmt(Math.round(n / 50) * 50))
+      : (n) => Math.round(n / 1000) + "k";
+    const unit = { hour: short ? "/hr" : " an hour", week: short ? "/wk" : " a week", month: short ? "/mo" : " a month", year: short ? "/yr" : " a year" }[p.period];
+    return "$" + f(lo) + (f(lo) === f(hi) ? "" : "–" + f(hi)) + unit;
+  }
   if (j?.kind === "Full-time") {
     const k = (h) => Math.round((h * 2080) / 1000);
     return (p.basis === "estimate" ? "~" : "") + (k(p.min) === k(p.max) ? `$${k(p.min)}k` : `$${k(p.min)}–${k(p.max)}k`) + (short ? "/yr" : " a year");
@@ -827,7 +839,9 @@ function payDetail(p) {
   if (p.basis === "unpaid") return p.note;
   const mo = Math.round(((p.typical ?? (p.min + p.max) / 2) * 2080) / 12 / 100) * 100;
   const head = p.basis === "posted" ? "Published by the employer." : `Estimate (${p.confidence} confidence). ${p.note}`;
-  return `${head} About $${fmt(mo)} a month full-time.`;
+  const mid = p.typical ?? (p.min + p.max) / 2;
+  const rng = (x) => (Math.round(p.min * x) === Math.round(p.max * x) ? "$" + fmt(Math.round(mid * x)) : "$" + fmt(Math.round(p.min * x)) + "–$" + fmt(Math.round(p.max * x)));
+  return `${head} Same pay as ${rng(1)}/hr, ${rng(40)}/week, ${rng(2080 / 12)}/month or ${rng(2080)}/year (full-time, 40 hours a week).`;
 }
 function payChip(j) {
   if (!j.pay) return "";
@@ -1193,7 +1207,12 @@ function localFilters(message, current) {
   if (/product (manag|owner|lead|strategy|roles?|jobs?|positions?|team)|\bpm\b|program manag|project manag/.test(m)) cats.add("Product");
   if (/\bdesign|\bux\b/.test(m)) cats.add("Design");
   if (/hardware|electrical eng|mechanical eng|chip|semiconductor/.test(m)) cats.add("Hardware");
-  if (/\bquant|trading/.test(m)) cats.add("Quant & Finance");
+  if (/\bquant|trading|\btrader|sales (and|&) trading|\bs&t\b|\bmarkets\b|derivatives|fixed income/.test(m)) cats.add("Quant & Finance");
+  if (/investment bank|\bibd\b|\bm&a\b|mergers|capital markets|leveraged finance|restructuring|summer analyst/.test(m)) cats.add("Investment Banking");
+  if (/private equity|\bpe\b|venture capital|asset management|wealth|hedge fund|equity research|portfolio|investment (analyst|research|management)|credit analyst|real estate (invest|finance)/.test(m)) cats.add("Asset Mgmt & PE");
+  if (/corporate finance|\bfp&a\b|financial analyst|\bfinance\b|treasury|banking/.test(m)) cats.add("Corporate Finance");
+  if (/accounting|\baudit|\btax\b|\bcpa\b|assurance/.test(m)) cats.add("Accounting & Audit");
+  if (/\brisk\b|compliance|insurance|underwrit|actuar|\baml\b|fraud/.test(m)) cats.add("Risk & Insurance");
   if (/\bresearch(er)? (role|position|intern)/.test(m)) cats.add("Research");
   if (/marketing/.test(m)) cats.add("Marketing");
   for (const c of neg.cats) cats.delete(c);
@@ -1584,23 +1603,47 @@ const AREAS = {
   mechanical: { cat: "Hardware", skills: ["solidworks", "cad", "autocad", "ansys", "fea", "cfd", "catia", "creo", "manufacturing", "3d printing", "mechanical design", "thermodynamics", "robotics", "ros", "controls"], titles: ["mechanical", "manufacturing", "robotics", "controls", "mechatronics", "aerospace", "propulsion", "structures", "test engineer"] },
   product: { cat: "Product", skills: ["product management", "roadmap", "user research", "a/b testing", "agile", "scrum", "jira", "product strategy", "go-to-market", "stakeholder"], titles: ["product manager", "product management", "program manager", "apm", "product"] },
   design: { cat: "Design", skills: ["figma", "sketch", "adobe xd", "photoshop", "illustrator", "ux", "ui", "user experience", "prototyping", "wireframing", "interaction design", "after effects", "motion design", "typography"], titles: ["design", "designer", "ux", "ui", "creative", "brand"] },
-  business: { cat: "Business & Ops", skills: ["consulting", "strategy", "operations", "supply chain", "sales", "marketing", "accounting", "finance", "business development", "project management", "salesforce", "hubspot"], titles: ["business", "operations", "strategy", "consulting", "sales", "marketing", "supply chain", "finance", "accounting"] },
+  ibanking: { cat: "Investment Banking", skills: ["investment banking", "m&a", "mergers and acquisitions", "lbo", "dcf", "valuation", "financial modeling", "pitch book", "pitchbook", "comparable company analysis", "precedent transactions", "capital markets", "equity capital markets", "debt capital markets", "leveraged finance", "due diligence", "capital iq", "factset", "accretion dilution", "restructuring", "fairness opinion", "powerpoint"], titles: ["investment banking", "banking", "m&a", "mergers", "capital markets", "leveraged finance", "restructuring", "coverage", "advisory", "summer analyst", "ibd", "corporate banking", "financial sponsors"] },
+  markets: { cat: "Quant & Finance", skills: ["sales and trading", "sales & trading", "trading", "bloomberg", "bloomberg terminal", "fixed income", "equities", "derivatives", "options", "futures", "fx", "commodities", "market making", "stochastic", "probability", "series 7", "series 63", "sie", "bloomberg market concepts", "portfolio risk", "quantitative finance", "algorithmic trading", "market data"], titles: ["sales and trading", "sales & trading", "trading", "trader", "markets", "quant", "quantitative", "strat", "structuring", "fixed income", "rates", "derivatives", "commodities", "fx"] },
+  assetmgmt: { cat: "Asset Mgmt & PE", skills: ["equity research", "private equity", "venture capital", "asset management", "wealth management", "portfolio management", "investment research", "stock pitch", "hedge fund", "fundamental analysis", "credit analysis", "real estate finance", "cfa", "financial statements", "investment thesis", "student managed fund", "portfolio construction", "alternative investments", "private credit", "real estate investment", "asset allocation"], titles: ["equity research", "research", "private equity", "venture", "asset management", "wealth", "portfolio", "investment", "fund", "credit", "acquisitions", "real estate", "hedge", "alternatives", "family office"] },
+  corpfin: { cat: "Corporate Finance", skills: ["financial planning and analysis", "fp&a", "financial analysis", "budgeting", "forecasting", "variance analysis", "treasury", "corporate finance", "capital budgeting", "working capital", "cash flow", "npv", "irr", "wacc", "project finance", "business partnering", "sap", "hyperion", "anaplan", "netsuite", "month-end close", "financial reporting", "excel", "financial modeling"], titles: ["finance", "financial analyst", "fp&a", "corporate finance", "treasury", "business finance", "strategic finance", "financial planning", "budget", "pricing", "project finance", "capital planning", "rotational", "financial"] },
+  accounting: { cat: "Accounting & Audit", skills: ["accounting", "gaap", "ifrs", "audit", "auditing", "tax", "cpa", "reconciliation", "accounts payable", "accounts receivable", "general ledger", "quickbooks", "sox", "internal controls", "assurance", "consolidation", "journal entries", "vita", "managerial accounting", "cost accounting"], titles: ["audit", "accounting", "accountant", "tax", "assurance", "controller", "financial reporting", "cpa", "advisory"] },
+  risk: { cat: "Risk & Insurance", skills: ["risk management", "credit risk", "market risk", "operational risk", "compliance", "aml", "kyc", "underwriting", "actuarial", "insurance", "regulatory", "model validation", "basel", "stress testing", "fraud", "sas", "exam p", "exam fm", "financial crimes", "enterprise risk"], titles: ["risk", "compliance", "underwriting", "actuarial", "insurance", "regulatory", "credit", "fraud", "financial crimes", "claims"] },
+  business: { cat: "Business & Ops", skills: ["consulting", "strategy", "operations", "supply chain", "sales", "marketing", "business development", "project management", "salesforce", "hubspot"], titles: ["business", "operations", "strategy", "consulting", "sales", "marketing", "supply chain"] },
 };
 const SKILL_WORDS = [...new Set(Object.values(AREAS).flatMap((a) => a.skills))];
 const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const SKILL_RE = SKILL_WORDS.map((w) => [w, new RegExp(`(^|[^a-z0-9+#.])${escRe(w)}(?![a-z0-9+#])`, "i")]);
 
 const GENERIC_TITLES = new Set(["software engineer", "software developer", "swe", "platform", "engineer", "product", "design", "data", "business", "finance", "server", "api"]);
-const SKILL_NAMES = { go: "Go", golang: "Go", fastapi: "FastAPI", typescript: "TypeScript", javascript: "JavaScript", postgresql: "PostgreSQL", mysql: "MySQL", mongodb: "MongoDB", pytorch: "PyTorch", tensorflow: "TensorFlow", "scikit-learn": "scikit-learn", sklearn: "scikit-learn", aws: "AWS", gcp: "GCP", sql: "SQL", "node.js": "Node.js", node: "Node.js", "next.js": "Next.js", "c++": "C++", "c#": "C#", ".net": ".NET", ios: "iOS", swiftui: "SwiftUI", nlp: "NLP", llm: "LLMs", "ci/cd": "CI/CD", ux: "UX", ui: "UI", "power bi": "Power BI", graphql: "GraphQL", rest: "REST APIs", css: "CSS", html: "HTML", fpga: "FPGA", asic: "ASIC", vhdl: "VHDL", rtos: "RTOS", dsp: "DSP", pcb: "PCB", cad: "CAD", fea: "FEA", cfd: "CFD", ros: "ROS", matlab: "MATLAB", "github actions": "GitHub Actions", "a/b testing": "A/B testing", dcf: "DCF models", kdb: "kdb+", opencv: "OpenCV", cuda: "CUDA", r: "R", c: "C", ai: "AI", jax: "JAX", etl: "ETL", rf: "RF", "hugging face": "Hugging Face", "react native": "React Native", solidworks: "SolidWorks", autocad: "AutoCAD", ansys: "ANSYS", systemverilog: "SystemVerilog", verilog: "Verilog" };
+const SKILL_NAMES = { go: "Go", golang: "Go", fastapi: "FastAPI", typescript: "TypeScript", javascript: "JavaScript", postgresql: "PostgreSQL", mysql: "MySQL", mongodb: "MongoDB", pytorch: "PyTorch", tensorflow: "TensorFlow", "scikit-learn": "scikit-learn", sklearn: "scikit-learn", aws: "AWS", gcp: "GCP", sql: "SQL", "node.js": "Node.js", node: "Node.js", "next.js": "Next.js", "c++": "C++", "c#": "C#", ".net": ".NET", ios: "iOS", swiftui: "SwiftUI", nlp: "NLP", llm: "LLMs", "ci/cd": "CI/CD", ux: "UX", ui: "UI", "power bi": "Power BI", graphql: "GraphQL", rest: "REST APIs", css: "CSS", html: "HTML", fpga: "FPGA", asic: "ASIC", vhdl: "VHDL", rtos: "RTOS", dsp: "DSP", pcb: "PCB", cad: "CAD", fea: "FEA", cfd: "CFD", ros: "ROS", matlab: "MATLAB", "github actions": "GitHub Actions", "a/b testing": "A/B testing", dcf: "DCF models", cfa: "CFA", "m&a": "M&A", lbo: "LBO", "fp&a": "FP&A", fx: "FX", sie: "SIE", gaap: "GAAP", ifrs: "IFRS", cpa: "CPA", aml: "AML", kyc: "KYC", sox: "SOX", npv: "NPV", irr: "IRR", wacc: "WACC", sap: "SAP", sas: "SAS", vita: "VITA", bloomberg: "Bloomberg", "capital iq": "Capital IQ", factset: "FactSet", pitchbook: "PitchBook", kdb: "kdb+", opencv: "OpenCV", cuda: "CUDA", r: "R", c: "C", ai: "AI", jax: "JAX", etl: "ETL", rf: "RF", "hugging face": "Hugging Face", "react native": "React Native", solidworks: "SolidWorks", autocad: "AutoCAD", ansys: "ANSYS", systemverilog: "SystemVerilog", verilog: "Verilog" };
 const prettySkill = (s) => SKILL_NAMES[s] || s.replace(/\b\w/g, (c) => c.toUpperCase());
 function profileFromText(text) {
   const t = " " + text.replace(/\s+/g, " ") + " ";
   const skills = SKILL_RE.filter(([w, re]) => (w.length > 2 || w === "go" ? re.test(t) : new RegExp(`[\\s,;(|/•·]${escRe(w)}[\\s,;)|/•·]`, "i").test(t))).map(([w]) => w.toLowerCase());
   const areas = {};
   for (const [k, a] of Object.entries(AREAS)) { const n = a.skills.filter((s) => skills.includes(s)).length; if (n) areas[k] = n; }
+  // What the person is studying and doing, not just which tools they list. A finance major
+  // who also uses Python and SQL is a finance candidate first.
+  const fieldTop = (t.match(/(?:B\.?S\.?|B\.?A\.?|B\.?B\.?A\.?|Bachelor of [A-Za-z ]+|M\.?S\.?|MBA)[^|•]{0,60}/g) || []).join(" ").toLowerCase() + " " + t.slice(0, 2500).toLowerCase();
+  const finHits = (t.match(/\b(investment banking|equity research|private equity|asset management|wealth management|financial analyst|financial modeling|valuation|dcf|lbo|capital markets|sales and trading|portfolio|securities|fp&a|audit|accounting|treasury|credit|underwriting|finance|financial|banking|trading|analyst)\b/gi) || []).length;
+  const finField = /\b(finance|financial|accounting|economics|banking|investments?|actuarial|real estate)\b/.test(fieldTop);
+  const dataField = /\b(mathematics|math\b|applied math|statistics|data science|computer science|econometrics|operations research|analytics)\b/.test(fieldTop);
+  const FINCAT = new Set(["Investment Banking", "Quant & Finance", "Asset Mgmt & PE", "Corporate Finance", "Accounting & Audit", "Risk & Insurance"]);
+  const financeIntent = finField || finHits >= 12;
   const catScore = {};
-  for (const [k, n] of Object.entries(areas)) catScore[AREAS[k].cat] = (catScore[AREAS[k].cat] || 0) + n;
-  const categories = Object.entries(catScore).sort((a, b) => b[1] - a[1]).map(([c]) => c).slice(0, 3);
+  for (const [k, n] of Object.entries(areas)) catScore[AREAS[k].cat] = (catScore[AREAS[k].cat] || 0) + n * (financeIntent && FINCAT.has(AREAS[k].cat) ? 1.6 : 1);
+  if (financeIntent) {
+    // Finance resumes rarely name finance "skills"; the field of study and experience say it.
+    for (const c of FINCAT) catScore[c] = (catScore[c] || 0) + (finField ? 3 : 1);
+    if (/investment banking|m&a|mergers|capital markets|summer analyst|pitch/i.test(t)) catScore["Investment Banking"] += 6;
+    if (/equity research|private equity|asset management|wealth|portfolio|hedge fund|stock pitch|investment (?:club|fund)/i.test(t)) catScore["Asset Mgmt & PE"] += 6;
+    if (/sales and trading|sales & trading|trading|markets|fixed income|derivatives|quant/i.test(t)) catScore["Quant & Finance"] += 6;
+    if (/fp&a|financial planning|corporate finance|treasury|budget|forecast|project finance/i.test(t)) catScore["Corporate Finance"] += 6;
+    if (/audit|accounting|\bcpa\b|tax|gaap/i.test(t)) catScore["Accounting & Audit"] += 6;
+    if (/risk|compliance|underwrit|actuar|insurance/i.test(t)) catScore["Risk & Insurance"] += 4;
+  }
+  const categories = Object.entries(catScore).sort((a, b) => b[1] - a[1]).map(([c]) => c).slice(0, 5);
   const degree = /\bph\.?\s?d\b|doctor of philosophy/i.test(t) ? "PhD" : /\bm\.?b\.?a\b/i.test(t) ? "MBA" : /\bmaster'?s?\b|\bm\.?s\.?\b(?= in| of|,)|\bm\.?eng\b/i.test(t) ? "Master's" : /\bbachelor|\bb\.?s\.?\b|\bb\.?a\.?\b|\bb\.?eng\b|undergraduate/i.test(t) ? "Bachelor's" : "";
   const yearNow = new Date().getFullYear();
   const gradM = t.match(/(?:expected|anticipated|graduat\w*|class of|grad\.?)\D{0,25}((?:19|20)\d\d)/i);
@@ -1611,11 +1654,16 @@ function profileFromText(text) {
   // Field of study shapes what "close to my resume" means: math, statistics and data science
   // students want analytics, data, quant and research roles, not engineering ones.
   const fieldText = (major + " " + t.slice(0, 2500)).toLowerCase();
-  const focus = /\b(mathematics|math\b|applied math|statistics|data science|actuarial|econometrics|operations research)\b/.test(fieldText) ? "analytics"
+  const analyticsField = /\b(mathematics|math\b|applied math|statistics|data science|actuarial|econometrics|operations research)\b/.test(fieldText);
+  const focus = financeIntent && analyticsField ? "finance+analytics" : financeIntent ? "finance"
+    : analyticsField ? "analytics"
     : /\b(computer science|software engineering|computer engineering)\b/.test(fieldText) ? "software"
     : /\b(mechanical|electrical|civil|aerospace|chemical|industrial) engineering\b/.test(fieldText) ? "engineering"
-    : /\b(finance|economics|accounting|business administration|marketing)\b/.test(fieldText) ? "business" : "";
+    : /\b(business administration|marketing)\b/.test(fieldText) ? "business" : "";
   if (focus === "analytics") categories.splice(0, categories.length, ...new Set(["Data & Analytics", "AI & Data Science", "Quant & Finance", ...categories.filter((c) => c !== "Software Engineering" && c !== "Hardware")]));
+  // Finance first, with analytics roles as a strong second lane rather than the whole list.
+  if (focus === "finance+analytics" && !categories.includes("Data & Analytics")) categories.splice(Math.min(3, categories.length), 0, "Data & Analytics");
+  if (focus.startsWith("finance")) categories.splice(0, categories.length, ...new Set(categories.filter((c) => FINCAT.has(c) || c === "Data & Analytics" || c === "Product" || c === "Business & Ops")).values());
   return { name: "", skills, areas, categories, degree, major, gradYear, states, focus, roles: [], summary: "" };
 }
 
@@ -1624,7 +1672,7 @@ function scoreJob(j, P) {
   const why = [];
   let score = 0;
   const ci = P.categories.indexOf(j.category);
-  if (ci >= 0) score += [34, 24, 16][ci] ?? 10;
+  if (ci >= 0) score += [34, 28, 22, 16, 10][ci] ?? 8;
   // title words that line up with the areas this resume is strongest in; a specific
   // title word ("machine learning") counts for more than a generic one ("software engineer")
   let areaPts = 0, bestArea = null;
@@ -1638,7 +1686,9 @@ function scoreJob(j, P) {
   score += areaPts;
   const named = (P.skills || []).filter((s) => s.length > 2 && title.includes(s)).slice(0, 2);
   if (named.length) score += 8;
-  const used = bestArea ? AREAS[bestArea].skills.filter((s) => P.skills.includes(s)).slice(0, 3) : named;
+  // cite the skills of the field the job is actually in before generic tools
+  const catArea = Object.keys(P.areas || {}).find((k) => AREAS[k].cat === j.category && AREAS[k].skills.some((x) => P.skills.includes(x)));
+  const used = (catArea || bestArea) ? AREAS[catArea || bestArea].skills.filter((s) => P.skills.includes(s)).slice(0, 3) : named;
   if (used.length) why.push("Uses your " + used.map(prettySkill).join(", "));
   else if (ci >= 0) why.push(`In your strongest area, ${j.category}`);
   if (P.degree) {
@@ -1657,8 +1707,15 @@ function scoreJob(j, P) {
   }
   if (P.states?.length && j.states.some((s) => P.states.includes(s))) { score += 6; why.push(`Near you in ${STATE_NAMES[j.states.find((s) => P.states.includes(s))]}`); }
   if (j.pay?.basis === "posted") score += 4;
-  const focus = P.focus || (/\b(math|statistic|data science|actuar)/i.test(P.major || "") ? "analytics" : "");
-  if (focus === "analytics") {
+  const focus = P.focus || (/\b(finance|accounting|economics|banking)/i.test(P.major || "") ? "finance" : /\b(math|statistic|data science|actuar)/i.test(P.major || "") ? "analytics" : "");
+  const FINCATS = ["Investment Banking", "Quant & Finance", "Asset Mgmt & PE", "Corporate Finance", "Accounting & Audit", "Risk & Insurance"];
+  if (focus.startsWith("finance")) {
+    const finTitle = /\b(financ\w*|invest\w*|bank\w*|equity|capital markets|m&a|merger\w*|trading|trader|markets|portfolio|private equity|asset management|wealth|credit|treasury|fp&a|audit\w*|account\w*|tax|risk|underwrit\w*|actuar\w*|valuation|quant\w*|securities|fixed income|derivatives|lending|summer analyst|strategist)\b/i;
+    if (FINCATS.includes(j.category) || finTitle.test(j.title)) { score += 20; why.unshift("Fits your finance background"); }
+    else if (focus === "finance+analytics" && /\b(analyst|analytics|data scien\w*|data|insights?|research|modeling|forecast\w*)\b/i.test(j.title)) { score += 8; why.push("Uses your data and math side"); }
+    if (j.category === "Software Engineering" || j.category === "Hardware") score -= 28;
+    else if (/\bengineer\w*\b/i.test(j.title) && !/\b(data|analytics|quant\w*|financ\w*)\b/i.test(j.title)) score -= 22;
+  } else if (focus === "analytics") {
     const dataTitle = /\b(analyst|analytics|data scien\w*|data|statistic\w*|actuar\w*|quant\w*|insights?|research|econom\w*|risk|modeling|forecast\w*|business intelligence|bi\b|machine learning|decision science)\b/i;
     if (dataTitle.test(j.title)) { score += 18; why.unshift("Fits your math / data science background"); }
     if (/\bengineer\w*\b/i.test(j.title) && !/\b(data|analytics|machine learning|ml|ai)\b/i.test(j.title)) score -= 40;
