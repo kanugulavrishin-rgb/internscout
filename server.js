@@ -89,6 +89,7 @@ function classify(title) {
   const t = title.toLowerCase();
   const engineering = /software|engineer|developer|\bswe\b|backend|frontend|full.?stack|infrastructure|security|mobile|\bios\b|android|devops|\bsre\b|architect|\bqa\b/.test(t) && !/\bquant/.test(t) && !/(?:financial|finance|investment|banking|risk|credit)\s+(?:analyst|associate)/.test(t);
   if (/\bquant\b|\bquantitative\b/.test(t)) return "Quant & Finance";
+  if (!engineering && /\baudit|assurance|attest/.test(t) && !/investment bank/.test(t)) return "Accounting & Audit"; // "Internal Audit and Financial Advisory" is audit
   if (!engineering && !/\b(?:machine learning|data scien)/.test(t)) for (const [cat, re] of FINANCE_FIELDS) if (re.test(t)) return cat;
   if (/machine learning|\bml\b|\bai\b|data scien|research scien|applied scien/.test(t)) return "AI & Data Science";
   if (/data (engineer|analyst|analytics)|analytics|business intelligence/.test(t)) return "Data & Analytics";

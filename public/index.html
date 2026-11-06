@@ -1378,11 +1378,15 @@ function renderBoard() {
     </div><div class="whennote">${fmt(cnt((j) => j.term?.source === "description"))} confirmed in job descriptions</div></div>`;
     const paid = list.filter((j) => j.pay && j.pay.basis !== "unpaid");
     if (paid.length) {
-      const B = [[0, 20], [20, 30], [30, 40], [40, 50], [50, 60], [60, 999]];
-      const counts = B.map(([lo, hi]) => paid.filter((j) => payMid(j) >= lo && payMid(j) < hi).length), pm = Math.max(1, ...counts);
+      // Full-time roles are shown as annual salary ($k a year), internships as hourly pay; the data is hourly either way.
+      const FT = F.kind === "Full-time", K = FT ? 2080 / 1000 : 1;
+      const B = FT ? [[0, 60], [60, 80], [80, 100], [100, 130], [130, 170], [170, 99999]] : [[0, 20], [20, 30], [30, 40], [40, 50], [50, 60], [60, 999]];
+      const unit = (v) => FT ? `$${v}k` : `$${v}`;
+      const counts = B.map(([lo, hi]) => paid.filter((j) => payMid(j) * K >= lo && payMid(j) * K < hi).length), pm = Math.max(1, ...counts);
       const postedN = list.filter((j) => j.pay?.basis === "posted").length;
-      html += `<div class="sec"><h5><span>Hourly pay</span><span class="num">median ${money([...paid].map(payMid).sort((a, b) => a - b)[paid.length >> 1])}/hr</span></h5>
-        <div class="payhist" role="img" aria-label="Pay distribution: ${B.map(([lo, hi], i) => `${counts[i]} between $${lo} and $${hi}`).join(", ")}">${B.map(([lo, hi], i) => `<div><i style="height:${Math.max(4, (counts[i] / pm) * 100)}%"></i><span>${hi > 900 ? `$${lo}+` : `$${lo}`}</span></div>`).join("")}</div>
+      const med = [...paid].map(payMid).sort((a, b) => a - b)[paid.length >> 1];
+      html += `<div class="sec"><h5><span>${FT ? "Annual salary" : "Hourly pay"}</span><span class="num">median ${FT ? `$${Math.round(med * K)}k/yr` : `${money(med)}/hr`}</span></h5>
+        <div class="payhist" role="img" aria-label="Pay distribution: ${B.map(([lo, hi], i) => `${counts[i]} between ${unit(lo)} and ${unit(hi)}`).join(", ")}">${B.map(([lo, hi], i) => `<div><i style="height:${Math.max(4, (counts[i] / pm) * 100)}%"></i><span>${hi > 900 ? `${unit(lo)}+` : unit(lo)}</span></div>`).join("")}</div>
         <div class="sparkaxis"><span>${fmt(postedN)} published · ${fmt(paid.length - postedN)} estimated</span><span>${fmt(list.length - paid.length)} unknown</span></div></div>`;
     }
     const days = Array.from({ length: 14 }, (_, i) => 13 - i).map((d) => list.filter((j) => j.postedAt && Math.floor((Date.now() - new Date(j.postedAt)) / 864e5) === d).length);
