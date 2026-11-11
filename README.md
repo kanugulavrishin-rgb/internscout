@@ -71,15 +71,30 @@ Descriptions come from each system's detail endpoint and are cached in `data/det
 - Pay in a posting is read in many forms: `$25/hr`, `$85,000 – $105,000 per year`, `USD 95,000 to 120,000`, `$4,500 per month`, `$1,800 per week`, `$3,000 bi-weekly`, `$8,000 for the summer`, `$60–75k a year`. A period unit right after the amount counts as proof of pay even without a word like "salary", while "$50 million raised" and "$10,000 relocation" are ignored.
 - Cards show posted pay in the unit the employer used; hover for the same amount per hour, week, month and year. Adzuna (with a key) now runs ten finance and early-career queries and keeps only salaries it did not predict.
 
+## Career tracks
+
+Every job is tagged with the specific job families it belongs to (`lib/tracks.js`, a job can have several): **Finance** (corporate finance, FP&A, treasury), **Investment Banking**, **Equity Research**, **Private Credit**, **Alternative Credit**, **Alternative Investments**, **Sales & Trading**, **Quant Trading**, **Data Science**, **Data Engineering**, **Data Analytics**, **Product Management**, **Technical PM** and **Product Strategy**. Tags come from the title and the employer: "Analyst" at a boutique bank is banking, a "Trader" at a proprietary trading firm is quant trading, "Research Assistant" at a manufacturer is not equity research. The board shows a chip per track with live counts; pick any number.
+
+Roles in these tracks are collected as full-time jobs even when no older job-family pattern matches them, at the early-career, mid and senior levels. Workday boards of financial employers are also searched for banking, research, credit, trading, data and product terms (`TRACK_SEARCHES` in `server.js`).
+
+`npm test` runs the track classifier tests and the snapshot round-trip test. The same `lib/tracks.js` is inlined into the page (`lib/page.js`), so the server, a typed question and a resume's job titles all use identical rules.
+
 ## Resume matching
 
-Upload a PDF, Word or text resume (button in the rail, the paperclip, or drag and drop). It's read in the browser; only the derived profile (skills, degree, graduation year, state) is kept, in that browser. With an API key the live server also has Claude read it once (not stored). Every internship gets a match score with reasons.
+Upload a PDF, Word or text resume (button in the rail, the paperclip, or drag and drop), or start from one of the three starter profiles (Finance, Data & Product, Markets & Trading), which carry only the shape of a resume (field, experience areas, tools) and no names, contact details or employers. Everything is read in the browser; only the derived profile is kept, in that browser. With an API key the live server also has Claude read it once (not stored).
 
-The resume's field is judged from the degree, coursework and experience, not just the tools listed. A finance or accounting resume ranks banking, markets, asset management, corporate finance, audit and risk roles first; a finance resume that also lists a data-science degree keeps analytics roles as a second lane; a pure data-science resume still ranks analytics first. Software and hardware roles are pushed down for finance resumes. Reasons on each card cite the skills of the role's own field (for example LBO and DCF for banking).
+What a resume does:
+- **Sets the search.** Its career tracks become the board's track filter ("Only my tracks"), full-time and internships both show, and senior and leadership roles are hidden. "Rank everything" keeps all roles but orders them by fit instead.
+- **Judges direction, not just keywords.** Each role title on the resume is classified with the same rules as the listings, tracks in the resume's main direction count fully and other directions count less, and the degree adds adjacent tracks.
+- **Ranks.** Track fit, a recognized financial employer (for finance resumes), pay, graduation year, and any summer already booked ("Incoming ... Summer Analyst, May 2027 - Aug 2027" pushes down that summer's internships).
+- **Combines with what you type.** "Private credit analyst in New York" adds the place and swaps the tracks; "only remote" adds remote; the resume keeps ranking. Up to four resumes are saved at once, switch between them with one click, or search with all of them together.
+- **Explains itself.** Each row and card says which track it matched and why.
+
+The page also shows how many roles are new since you last looked, and the same posting in several offices is one row ("+3 more locations").
 
 ## Shareable snapshot
 
-With the server running: `node scripts/build-snapshot.mjs` writes `dist/internscout.html`, a single page with the current listings built in.
+With the server running: `node scripts/build-snapshot.mjs` writes `dist/internscout.html`, a single page with the current listings built in. Listings are stored packed (`lib/pack.js`: repeated employers, hosts, locations and pay notes live in tables, each listing is a short array), about a third of the size of plain JSON, so a snapshot of 65,000+ listings is roughly 6 MB and opens quickly.
 
 ## Adding coverage
 

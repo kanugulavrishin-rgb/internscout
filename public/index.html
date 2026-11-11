@@ -504,6 +504,27 @@ p, .say, .hello p, .fits, .paynote, .evidence { text-wrap: pretty; }
 .start .count { position: static; align-self: flex-start; margin-bottom: 18px; }
 .start b { font-size: 21px; }
 @media (max-width: 860px) { .dock { padding: 8px 12px 78px; } .scroll { padding: 8px 16px 20px; } .bhead h2 { white-space: nowrap; font-size: 19px; } .bhead .tabs button { padding: 5px 10px; letter-spacing: .1em; } .outreach span { display: none; } .outreach { padding: 0; width: 44px; justify-content: center; } }
+/* career tracks + resume card */
+.tracks .tgrp { margin-top: 6px; }
+.tracks .tgl { display: block; font-size: 10.5px; letter-spacing: .13em; text-transform: uppercase; color: var(--faint); margin: 8px 0 5px; }
+.tracks .facet { flex-wrap: wrap; overflow: visible; }
+.facet button.mine::after { content: "★"; font-size: 10px; opacity: .7; margin-left: -2px; }
+.myprofile .rpills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.myprofile .rpw { display: inline-flex; align-items: center; }
+.myprofile .rp, .myprofile .fitmode button { border: 1px solid var(--edge); background: var(--wash); border-radius: 999px; padding: 5px 12px; font-size: 13px; cursor: pointer; transition: background .15s, transform .15s; }
+.myprofile .rpw .rp { border-top-right-radius: 4px; border-bottom-right-radius: 4px; border-right: 0; }
+.myprofile .rpx { border: 1px solid var(--edge); background: var(--wash); border-radius: 0 999px 999px 0; width: 24px; height: 29px; font-size: 14px; color: var(--muted); cursor: pointer; }
+.myprofile .rpx:hover { color: var(--text); background: var(--wash-2); }
+.myprofile .rp:hover, .myprofile .fitmode button:hover { background: var(--wash-2); }
+.myprofile .rp[aria-pressed="true"], .myprofile .fitmode button[aria-pressed="true"] { background: var(--grad); color: #FFF8F0; border-color: transparent; }
+.myprofile .rp.up { border-style: dashed; }
+.myprofile .pfline { margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+.myprofile .pfnote { margin: 6px 0 0; font-size: 13px; color: var(--muted); line-height: 1.45; }
+.myprofile .fitmode { display: flex; gap: 6px; margin-top: 8px; }
+.newsince { margin-top: 8px; border: 0; border-radius: 999px; padding: 5px 12px; font-size: 12.5px; cursor: pointer; background: color-mix(in srgb, var(--live) 20%, transparent); color: var(--text); }
+.newsince:hover { background: color-mix(in srgb, var(--live) 32%, transparent); }
+.tag.trk { background: color-mix(in srgb, var(--violet) 20%, transparent); }
+.brow .bt small.rwhy { color: var(--accent-text); }
 </style>
 </head>
 <body>
@@ -543,7 +564,7 @@ p, .say, .hello p, .fits, .paynote, .evidence { text-wrap: pretty; }
             <label class="sr" for="input">Message Scout</label>
             <input type="file" id="resumeFile" accept=".pdf,.docx,.txt,.md,application/pdf" hidden>
             <button type="button" class="cbtn" id="attach" aria-label="Upload your resume to match internships"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m21 11-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l7.9-7.9"/></svg></button>
-            <textarea id="input" rows="1" placeholder="Describe the internship you're hoping for…"></textarea>
+            <textarea id="input" rows="1" placeholder="Describe the role you're hoping for…"></textarea>
             <button type="button" class="cbtn" id="voice" aria-label="Speak to Scout"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
             <button type="submit" class="cbtn send" id="send" aria-label="Send"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
           </form>
@@ -580,6 +601,7 @@ p, .say, .hello p, .fits, .paynote, .evidence { text-wrap: pretty; }
 <div class="toast glass" id="toast" role="status"><span id="toastTxt"></span></div>
 <div class="sr" id="announce" aria-live="polite"></div>
 
+<script>/*@TRACKS@*/</script>
 <script>
 (() => {
 const $ = (s, r = document) => r.querySelector(s);
@@ -596,6 +618,36 @@ const CAT_HUE = { "Software Engineering": "var(--ember)", "AI & Data Science": "
 const MONO = [["#FF7A3D", "#E8418F"], ["#E8418F", "#8B5CF6"], ["#8B5CF6", "#6AB0FF"], ["#FFB25E", "#FF7A3D"], ["#2FB394", "#6AB0FF"], ["#C4507A", "#FFB25E"], ["#7A5CF0", "#E8418F"]];
 const DEGREES = ["Bachelor's", "Master's", "PhD", "MBA"];
 const VISA_BLOCKERS = ["No visa sponsorship", "U.S. citizens only"];
+// Career tracks come from lib/tracks.js, inlined into the page by the server and the snapshot builder.
+const TRACK_LIST = typeof TRACKS !== "undefined" ? TRACKS : [];
+const TRACK_NAME = Object.fromEntries(TRACK_LIST.map((t) => [t.id, t.label]));
+const SPECIFIC_TRACKS = new Set(["ib", "er", "privcredit", "altcredit", "altinv", "st", "quant", "datasci", "dataeng", "tpm", "prodstrat"]);
+const FINANCE_TRACKS = new Set(["finance", "ib", "er", "privcredit", "altcredit", "altinv", "st", "quant"]);
+const trackTags = (j, n = 2) => (j.tracks || []).slice(0, n).map((t) => TRACK_NAME[t]).filter(Boolean);
+// What a resume says about each track: [phrase, weight]. A phrase counts once (1.5x when it appears 3+ times).
+const TRACK_SIGNALS = {
+  ib: [["investment banking", 4], ["m&a", 3], ["mergers and acquisitions", 3], ["lbo", 3], ["dcf", 2], ["pitch book", 2], ["pitchbook", 2], ["comparable company", 2], ["precedent transactions", 2], ["capital markets", 2], ["leveraged finance", 3], ["valuation", 2], ["accretion", 2], ["capital iq", 1], ["fairness opinion", 3], ["coverage group", 2], ["summer analyst", 2], ["financial modeling", 1]],
+  er: [["equity research", 4], ["stock pitch", 3], ["research analyst", 3], ["investment thesis", 2], ["fundamental analysis", 2], ["sell-side", 3], ["buy-side", 3], ["initiating coverage", 3], ["student managed fund", 2], ["investment club", 2], ["earnings", 1], ["valuation", 1], ["factset", 1]],
+  privcredit: [["private credit", 4], ["direct lending", 4], ["credit analysis", 3], ["credit agreement", 3], ["covenant", 3], ["middle market", 3], ["leveraged", 2], ["underwriting", 2], ["credit risk", 2], ["lending", 2], ["loan", 1], ["debt", 1], ["fixed income", 1]],
+  altcredit: [["alternative credit", 4], ["structured credit", 3], ["asset-based", 3], ["distressed", 3], ["securitization", 3], ["mortgage-backed", 2], ["specialty finance", 3], ["fixed income", 2], ["credit", 1]],
+  altinv: [["private equity", 4], ["venture capital", 4], ["hedge fund", 4], ["alternative investments", 4], ["asset management", 3], ["family office", 3], ["portfolio management", 2], ["investment analysis", 2], ["capital allocation", 2], ["due diligence", 2], ["real estate", 1], ["portfolio", 1]],
+  st: [["sales and trading", 4], ["sales & trading", 4], ["trading desk", 3], ["market making", 3], ["fixed income", 3], ["trading", 2], ["equities", 2], ["derivatives", 2], ["options", 2], ["futures", 2], ["commodities", 2], ["bloomberg", 2], ["series 7", 2], ["series 63", 2], ["sie", 2], ["markets", 1], ["fx", 1]],
+  quant: [["quantitative", 3], ["quant", 3], ["stochastic", 3], ["algorithmic", 3], ["backtest", 3], ["monte carlo", 3], ["probability", 2], ["time series", 2], ["statistical", 2], ["c++", 2], ["econometrics", 2], ["options", 1], ["derivatives", 1], ["linear algebra", 1], ["multivariable calculus", 1], ["mathematical statistics", 2]],
+  datasci: [["data scientist", 4], ["machine learning", 4], ["data science", 3], ["scikit-learn", 3], ["xgboost", 3], ["pytorch", 3], ["tensorflow", 3], ["feature engineering", 3], ["predictive", 2], ["regression", 2], ["classification", 2], ["anomaly detection", 2], ["a/b", 2], ["nlp", 2], ["pandas", 1], ["cohort", 1]],
+  dataeng: [["data engineer", 4], ["data engineering", 4], ["etl", 3], ["airflow", 3], ["spark", 3], ["snowflake", 3], ["snowpro", 3], ["databricks", 3], ["dbt", 3], ["data warehouse", 3], ["pipelines", 2], ["pipeline", 2], ["cloud computing", 1], ["aws", 1], ["sql", 1]],
+  dataan: [["data analyst", 4], ["business intelligence", 3], ["tableau", 3], ["power bi", 2], ["dashboards", 2], ["analytics", 1], ["sql", 1], ["kpi", 1], ["funnel", 1], ["cohort", 1], ["power query", 1], ["excel", 0.5], ["reporting", 0.5], ["insights", 0.5]],
+  pm: [["product manager", 4], ["product management", 4], ["user stories", 3], ["acceptance criteria", 3], ["roadmap", 3], ["backlog", 3], ["product owner", 3], ["requirements", 2], ["agile", 2], ["scrum", 2], ["go-to-market", 2], ["cross-functional", 2], ["product", 1], ["jira", 1], ["stakeholders", 1]],
+  tpm: [["technical product", 4], ["technical program", 3], ["ai-enabled", 3], ["ai product", 3], ["api", 2], ["architecture", 2], ["sales engineering", 2], ["data engineering", 2], ["platform", 1], ["cloud", 1], ["engineering", 1]],
+  prodstrat: [["product strategy", 4], ["go-to-market", 3], ["gtm", 3], ["market sizing", 3], ["strategy & analytics", 3], ["strategy", 2], ["pricing", 2], ["business case", 2], ["competitive", 2], ["market analysis", 2], ["customer value", 2], ["strategic", 1]],
+  finance: [["fp&a", 3], ["corporate finance", 3], ["treasury", 3], ["capital budgeting", 3], ["project finance", 3], ["financial modeling", 2], ["npv", 2], ["irr", 2], ["wacc", 2], ["forecasting", 2], ["forecast", 2], ["variance", 2], ["finance", 2], ["budget", 1], ["cash flow", 1], ["valuation", 1]],
+};
+// Starter profiles: the shape of each of Vrishin's three resumes (field of study, experience areas, tools), with no
+// names, contact details or employers. They give the same personalized search without uploading anything.
+const STARTERS = [
+  { name: "Finance", text: "BBA Finance and Accounting and BS Data Science and Applied Mathematics. Expected graduation December 2027. GPA 3.58. Incoming investment banking summer analyst, May 2027 - Aug 2027, energy coverage group. Portfolio management and optimization intern: pricing, volume and product mix analysis, margin drivers, capital allocation, scenario and sensitivity analysis, Python SQL Power BI. Project finance and investment analytics intern: NPV, IRR, WACC, payback, capital budgeting, forecasting, FP&A. Markets data analyst, user acquisition and trading analytics. Coursework: Corporate Finance, Financial Modeling, Principles of Valuation, Financial and Managerial Accounting, Fixed Income Assets, Investments. CFA Level I candidate, FINRA SIE, Bloomberg Market Concepts." },
+  { name: "Data & Product", text: "BS Data Science and Applied Mathematics and BBA Finance and Accounting. Expected graduation December 2027. GPA 3.58. Incoming summer analyst, May 2027 - Aug 2027. AI product and data engineering intern: built AI-enabled analytics products with cross-functional stakeholders, requirements, user stories, acceptance criteria, KPIs, Python pandas NumPy SQL ETL pipelines, data validation, feature engineering, GTM technical analysis, sales engineering. GTM data scientist, user acquisition and referral analytics: Python SQL product analytics pipelines, scikit-learn, XGBoost, cohort segmentation, anomaly detection. Product strategy and analytics intern: Excel Power Query Power BI data models. Coursework: Machine Learning, Applied Regression, Mathematical Statistics, Predictive Modeling, Cloud Computing, Data Structures and Algorithms. AWS Certified Data Engineer, Databricks Data Engineer Associate, SnowPro Core." },
+  { name: "Markets & Trading", text: "BBA Finance and Accounting and BS Data Science and Applied Mathematics. Expected graduation December 2027. GPA 3.58. Incoming equity sales and trading summer analyst, May 2027 - Aug 2027, equities desk. Commodities and pricing analytics intern: price realization, margin drivers, scenario analysis, Python SQL. Prediction markets data analyst, trading analytics: SQL, cohort and anomaly analysis of traders. Investment risk and capital analytics intern: NPV, IRR, WACC, stress testing, risk-adjusted returns. Quantitative analysis, probability and statistics. Coursework: Investments, Fixed Income Assets, Corporate Finance, Financial Modeling, Mathematical Statistics, Linear Algebra, Multivariable Calculus. CFA Level I candidate, FINRA SIE, Bloomberg Market Concepts." },
+];
 
 /* A published snapshot carries its listings inline and has no server to talk to. */
 // The published snapshot carries its listings gzipped and base64-encoded to stay small.
@@ -603,12 +655,34 @@ const SNAP = window.__SNAPSHOT__ || (window.__SNAPSHOT_GZ__ ? {} : null);
 async function unpackSnapshot() {
   if (!window.__SNAPSHOT_GZ__ || SNAP.jobs) return;
   const bin = Uint8Array.from(atob(window.__SNAPSHOT_GZ__), (c) => c.charCodeAt(0));
-  Object.assign(SNAP, JSON.parse(await new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream("gzip"))).text()));
+  const d = JSON.parse(await new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream("gzip"))).text());
+  Object.assign(SNAP, d.v === 2 ? { jobs: unpackRows(d), status: d.status } : d);
+}
+// Packed listings (see lib/pack.js): repeated strings live in tables, each listing is a short array.
+function unpackRows(d) {
+  const T = d.t, BASIS = ["posted", "unpaid", "estimate"], CONF = ["", "high", "medium", "low"];
+  const list = (str) => (str ? str.split("|") : []);
+  return d.rows.map((r) => {
+    const host = r[2] >= 0 ? T.host[r[2]] : "";
+    const url = r[2] >= 0 ? "https://" + host + r[3] : r[3];
+    let pay = null;
+    const p = r[14];
+    if (Array.isArray(p)) { pay = { basis: BASIS[p[0]] }; if (p[1] != null) pay.min = p[1]; if (p[2] != null) pay.max = p[2]; if (p[3] != null) pay.typical = p[3]; if (p[4] >= 0) pay.note = T.note[p[4]]; if (p[5]) pay.confidence = CONF[p[5]]; if (p[6]) pay.period = p[6]; }
+    else if (p) pay = p;
+    const f = r[6];
+    const j = { id: r[17] >= 0 ? T.pre[r[17]] + ":" + url : r[18], company: T.company[r[0]], title: r[1], url, applyHost: host || (() => { try { return new URL(url).host; } catch { return ""; } })(), direct: !(f & 2),
+      postedAt: r[4] ? new Date(r[4] * 1000).toISOString() : null, states: r[5] ? r[5].split(",") : [], remote: !!(f & 1), category: T.cat[r[7]], seasons: list(r[8]), degrees: list(T.deg[r[9]]),
+      sponsorship: T.spons[r[10]], kind: f & 8 ? "Full-time" : "Internship", term: r[12] || {}, cycle: list(T.cyc[r[13]]), offCycle: !!(f & 4), location: T.loc[r[15]], tracks: r[16] ? r[16].split(",") : [] };
+    if (r[11] >= 0) j.level = T.lvl[r[11]];
+    if (pay) j.pay = pay;
+    if (r[19]) j.seenOn = r[19];
+    return j;
+  });
 }
 
 /* ---------------- state ---------------- */
 let JOBS = [], STATUS = null, loaded = false;
-const blank = () => ({ keywords: [], exclude: [], excludeCategories: [], industries: [], boost: [], categories: [], states: [], remoteOnly: false, kind: "Internship", level: "", season: "", offCycle: false, cycle: [], weeksBand: "", termConfirmed: false, degree: "", needsVisa: false, minHourlyPay: 0, paidOnly: false, payPostedOnly: false, companies: [], postedWithinDays: 0 });
+const blank = () => ({ keywords: [], exclude: [], excludeCategories: [], industries: [], boost: [], categories: [], states: [], remoteOnly: false, kind: "Internship", level: "", season: "", offCycle: false, cycle: [], weeksBand: "", termConfirmed: false, degree: "", needsVisa: false, minHourlyPay: 0, paidOnly: false, payPostedOnly: false, companies: [], postedWithinDays: 0, tracks: [], hideSenior: false });
 /* view-only settings that never go to the server */
 const V = { q: "", sort: "new", strongOnly: false, hideApplied: store.get("is-hide-applied", true) };
 let applied = new Set(store.get("is-applied", []));
@@ -617,7 +691,7 @@ let answered = new Set();
 let started = false, busy = false, firstResults = true;
 let saved = new Set(store.get("is-saved", []));
 let searches = store.get("is-searches", []);
-let boardTab = "matches", boardShown = 30, lastText = "";
+let boardTab = "matches", boardShown = 40, lastText = "";
 
 /* ---------------- matching ---------------- */
 function seasonMatch(want, have) {
@@ -690,7 +764,7 @@ const excludedBy = (j, f) => (f.exclude || []).some((k) => (EXCLUSIONS[k]?.re ||
 // How many of the person's extra wishes (skills, industries) a job hits.
 function relevance(j, f = F) {
   let r = 0;
-  const hay = (j.title + " " + j.company).toLowerCase();
+  const hay = j._hay ||= (j.title + " " + j.company).toLowerCase();
   for (const b of f.boost || []) if (b !== "senior" && hay.includes(b)) r += 2;
   const ind = industryOf(j);
   for (const i of f.industries || []) if (ind.includes(i)) r += 3;
@@ -700,9 +774,11 @@ function relevance(j, f = F) {
 function matches(j, f = F, skip) {
   if (skip !== "pay" && !payOk(j, f)) return false;
   if (j.direct === false) return false; // only employer-hosted applications
-  const hay = (j.title + " " + j.company).toLowerCase();
+  const hay = j._hay ||= (j.title + " " + j.company).toLowerCase();
   if (f.keywords.length && !f.keywords.some((k) => hay.includes(k.toLowerCase()))) return false;
   if (skip !== "categories" && f.categories.length && !f.categories.includes(j.category)) return false;
+  if (skip !== "tracks" && f.tracks?.length && !(j.tracks && j.tracks.some((t) => f.tracks.includes(t)))) return false;
+  if (f.hideSenior && j.kind === "Full-time" && (j.level === "Senior" || j.level === "Leadership")) return false;
   if ((f.exclude?.length || f.excludeCategories?.length) && excludedBy(j, f)) return false;
   if (skip !== "industry" && f.industries?.length && !industryOf(j).some((i) => f.industries.includes(i))) return false;
   // "Atlanta or remote": with places picked, Remote widens the search instead of narrowing it
@@ -734,15 +810,17 @@ function tally(list, key) {
 const today = (list) => list.filter((j) => j.postedAt && Date.now() - new Date(j.postedAt) < 864e5).length;
 
 function describe(f = F) {
+  const tn = (f.tracks || []).map((t) => TRACK_NAME[t]).filter(Boolean);
+  const trackText = tn.length > 2 ? tn[0] + ` +${tn.length - 1} tracks` : tn.length > 1 ? tn.join(" & ") : tn[0] || "";
   if (PROFILE && !f.categories.length && !f.keywords.length && !f.companies.length) {
     const rest = describeRest(f);
-    return (F.kind === "Full-time" ? "Your best-fit full-time roles" : F.kind ? "Your best-fit internships" : "Your best-fit roles") + rest;
+    return (F.kind === "Full-time" ? "Your best-fit full-time roles" : F.kind ? "Your best-fit internships" : "Your best-fit roles") + (trackText ? ` in ${trackText}` : "") + rest;
   }
   if (isBlank(f)) return "Every open internship";
   if (isBlank({ ...f, kind: "Internship" })) return f.kind === "Full-time" ? "Every open early-career full-time role" : "Every open internship and early-career role";
   const SHORT = { "Software Engineering": "Software", "AI & Data Science": "AI & ML", "Data & Analytics": "Analytics", "Business & Ops": "Business" };
   const cats = f.categories.map((c) => (f.categories.length > 1 ? SHORT[c] || c : c));
-  const role = cats.length ? (cats.length > 1 ? cats.slice(0, -1).join(", ") + " or " + cats.at(-1) : cats[0]) : f.keywords.length ? f.keywords.map((k) => k[0].toUpperCase() + k.slice(1)).join(" & ") : "";
+  const role = cats.length ? (cats.length > 1 ? cats.slice(0, -1).join(", ") + " or " + cats.at(-1) : cats[0]) : f.keywords.length ? f.keywords.map((k) => k[0].toUpperCase() + k.slice(1)).join(" & ") : trackText;
   const noun = f.kind === "Full-time" ? "full-time roles" : f.kind ? "internships" : "roles";
   let s = `${role ? role + " " + noun : noun[0].toUpperCase() + noun.slice(1)}`;
   if (f.companies.length) s += ` at ${f.companies.join(" or ")}`;
@@ -761,7 +839,7 @@ function describeRest(f) {
   if (f.cycle?.length) s += `, ${f.cycle.join(" or ").toLowerCase()}`;
   if (f.weeksBand) s += `, ${WEEK_BANDS[f.weeksBand][2]}`;
   if (f.termConfirmed) s += " (term confirmed)";
-  if (f.degree) s += ` for ${f.degree} students`;
+  if (f.degree && !(PROFILE && PROFILE.degree === f.degree)) s += ` for ${f.degree} students`;
   if (f.needsVisa) s += ", open to visa holders";
   if (f.minHourlyPay) s += `, $${f.minHourlyPay}+/hr`;
   else if (f.paidOnly) s += ", paid";
@@ -774,6 +852,8 @@ function fitsLine(j) {
   const ind = industryOf(j).filter((i) => (F.industries || []).includes(i));
   if (ind.length) r.push(ind[0].toLowerCase());
   for (const b of (F.boost || []).filter((b) => b !== "senior")) if ((j.title + " " + j.company).toLowerCase().includes(b)) r.push(`mentions “${b}”`);
+  const tr = (j.tracks || []).filter((t) => (F.tracks || []).includes(t));
+  if (tr.length) r.push(TRACK_NAME[tr[0]]);
   if (F.categories.includes(j.category)) r.push(j.category);
   const st = j.states.filter((s) => F.states.includes(s));
   if (st.length) r.push("in " + STATE_NAMES[st[0]]);
@@ -857,7 +937,7 @@ function jobCard(j, i = 0) {
       <button type="button" class="heart" data-save="${esc(j.id)}" aria-pressed="${saved.has(j.id)}" aria-label="Save ${esc(j.title)}">${heartSvg}</button></div>
     <div class="jtitle"><h4>${esc(j.title)}</h4>${payChip(j)}</div>
     ${j.pay?.basis === "estimate" ? `<div class="paynote">${esc(j.pay.note)}${j.pay.sources?.length ? ` <a href="${esc(j.pay.sources[0])}" target="_blank" rel="noopener">Source</a>` : ""}</div>` : ""}
-    <div class="tags"><span class="tag"><i style="--c:${CAT_HUE[j.category]}"></i>${esc(j.category)}</span>${j.kind === "Full-time" ? `<span class="tag ft">Full-time · ${esc((j.level || "Early career").toLowerCase())}</span>` : ""}${j.offCycle ? `<span class="tag offc">Off-cycle</span>` : ""}${degreeTag(j)}${j.sponsorship !== "Not stated" ? `<span class="tag ${j.sponsorship === "Sponsors visas" ? "good" : "warn"}">${esc(j.sponsorship)}</span>` : ""}</div>
+    <div class="tags"><span class="tag"><i style="--c:${CAT_HUE[j.category]}"></i>${esc(j.category)}</span>${trackTags(j, 2).map((t) => `<span class="tag trk">${esc(t)}</span>`).join("")}${j.kind === "Full-time" ? `<span class="tag ft">Full-time · ${esc((j.level || "Early career").toLowerCase())}</span>` : ""}${j.offCycle ? `<span class="tag offc">Off-cycle</span>` : ""}${degreeTag(j)}${j.sponsorship !== "Not stated" ? `<span class="tag ${j.sponsorship === "Sponsors visas" ? "good" : "warn"}">${esc(j.sponsorship)}</span>` : ""}</div>
     ${fits ? `<div class="fits">${esc(fits)}</div>` : ""}
     ${PROFILE && j._why?.length ? `<div class="why">${esc(j._why.join(" · "))}</div>` : ""}
     ${termBlock(j)}
@@ -966,7 +1046,7 @@ async function stream(el, text) {
   if (RM.matches) { el.insertAdjacentText("beforeend", text); return; }
   for (const word of text.split(" ")) {
     const s = document.createElement("span"); s.className = "w"; s.textContent = word + " "; el.appendChild(s);
-    if (word) await wait(/[.!?]$/.test(word) ? 110 : 30 + Math.random() * 26);
+    if (word) await wait(/[.!?]$/.test(word) ? 35 : 7 + Math.random() * 7);
   }
 }
 async function scout({ echo = "", lines = [], render = null, question = "", chips = [], after = null }) {
@@ -976,7 +1056,7 @@ async function scout({ echo = "", lines = [], render = null, question = "", chip
   const say = m.querySelector(".say");
   if (echo) { const p = document.createElement("p"); p.innerHTML = `<span class="echo">“${esc(echo)}”</span>`; say.appendChild(p); }
   for (const line of lines.filter(Boolean)) { const p = document.createElement("p"); say.appendChild(p); await stream(p, line); toBottom(); }
-  if (render) { m.appendChild(render()); toBottom(); sfx("chime"); await wait(RM.matches ? 150 : 1000); }
+  if (render) { m.appendChild(render()); toBottom(); sfx("chime"); await wait(RM.matches ? 0 : 160); }
   if (question) { const host = document.createElement("div"); host.className = "say"; m.appendChild(host); const q = document.createElement("p"); q.className = "q"; host.appendChild(q); await stream(q, question); }
   announce([echo && `“${echo}”`, ...lines, question].filter(Boolean).join(" "));
   toBottom(); after?.(); setChips(chips);
@@ -989,7 +1069,7 @@ function milestone(text) {
 async function withThinking(labels, fn, minMs = 1000) {
   busy = true; $("#send").disabled = true; setChips([]);
   const stop = thinking(labels, "Still checking. A few company pages are slow to answer.");
-  try { const [r] = await Promise.all([fn(), wait(minMs + Math.random() * 400)]); stop(); return r; }
+  try { const [r] = await Promise.all([fn(), wait(Math.min(minMs, 320) + Math.random() * 80)]); stop(); return r; }
   catch (e) { stop(); throw e; }
   finally { busy = false; $("#send").disabled = false; }
 }
@@ -1014,7 +1094,7 @@ function resultsCard(before, after, list) {
       <button type="button" class="react" data-react="surprise">Surprise me</button>
     </div>`;
   sec.querySelectorAll(".react").forEach(magnetize);
-  requestAnimationFrame(() => setTimeout(() => { countTo(sec.querySelector("[data-count]"), before, after); sec.querySelector(".narrow i").style.setProperty("--w", share + "%"); }, RM.matches ? 0 : 500));
+  requestAnimationFrame(() => setTimeout(() => { countTo(sec.querySelector("[data-count]"), before, after); sec.querySelector(".narrow i").style.setProperty("--w", share + "%"); }, RM.matches ? 0 : 150));
   return sec;
 }
 
@@ -1035,7 +1115,7 @@ thread.addEventListener("click", (e) => {
 
 /* ---------------- the next question (one at a time) ---------------- */
 function nextQuestion(list) {
-  if (!F.categories.length && !F.keywords.length && !answered.has("what")) {
+  if (!F.categories.length && !F.keywords.length && !F.tracks?.length && !answered.has("what")) {
     const top = tally(list, "category").slice(0, 4);
     return { q: "What kind of work makes you lose track of time?", chips: [...top.map(([c, n]) => ({ label: c, count: n, run: () => refine(c, { categories: [c] }, `${c}. Good instinct, there's a lot happening there.`) })),
       { label: "Show me everything", run: () => { answered.add("what"); refine("Show me everything", {}, "Everything it is. Sometimes the best fit is the one you didn't plan for."); } }] };
@@ -1101,12 +1181,15 @@ async function present({ echo = "", lead = "", before }) {
       ["the industry (it still ranks matches higher)", (f) => ({ boost: [...new Set([...(f.boost || []), ...(f.industries || []).map((i) => i.split(" ")[0].toLowerCase())])], industries: [] }), (f) => f.industries?.length],
       ["the exact keywords", () => ({ keywords: [] }), (f) => f.keywords.length],
       ["the experience level", () => ({ level: "" }), (f) => f.level],
+      ["the entry-to-mid level limit", () => ({ hideSenior: false }), (f) => f.hideSenior],
+      ["the broad role category", () => ({ categories: [] }), (f) => f.categories.length && f.tracks?.length],
       ["the term", () => ({ season: "", cycle: [], offCycle: false }), (f) => f.season || f.cycle.length || f.offCycle],
       ["the pay minimum", () => ({ minHourlyPay: 0, payPostedOnly: false }), (f) => f.minHourlyPay || f.payPostedOnly],
       ["the posting date", () => ({ postedWithinDays: 0 }), (f) => f.postedWithinDays],
       ["the location (remote roles count too)", (f) => ({ remoteOnly: true }), (f) => f.states.length && !f.remoteOnly],
       ["the location", () => ({ states: [], remoteOnly: false }), (f) => f.states.length || f.remoteOnly],
       ["the company", () => ({ companies: [] }), (f) => f.companies.length],
+      ["the career track (results are still ranked by it)", () => ({ tracks: [] }), (f) => f.tracks?.length],
     ];
     const relaxed = [];
     for (const [label, patch, applies] of steps) {
@@ -1192,6 +1275,24 @@ function negations(m) {
   for (const sp of spans) rest = rest.replace(sp, " ");
   return { exclude: [...exclude], cats: [...cats], rest };
 }
+const TRACK_ASK = [
+  ["ib", /investment bank|\bibd\b|\bm&a\b|banking (analyst|summer)|mergers|leveraged finance|capital markets/],
+  ["er", /equity research|research analyst|sell.?side|buy.?side|investment research/],
+  ["privcredit", /private credit|direct lending|private debt|middle.?market (lending|credit)/],
+  ["altcredit", /alternative credit|alt credit|asset.?based (finance|lending)|structured credit|distressed|specialty finance/],
+  ["altinv", /alternative invest|private equity|\bpe\b (analyst|associate)|venture capital|hedge fund|family office|alternatives/],
+  ["st", /sales (and|&) trading|\bs&t\b|\btrad(ing|er)s?\b|global markets|markets (analyst|summer)/],
+  ["quant", /\bquant|systematic (trading|investing)|algo(rithmic)? trading|prop(rietary)? trading|\bhft\b|high.?frequency/],
+  ["datasci", /data scien|machine learning|\bml (engineer|scientist)|applied scien/],
+  ["dataeng", /data engineer|analytics engineer|\betl\b|data platform|data pipelines?/],
+  ["dataan", /data analy|business intelligence|\bbi (analyst|developer)|analytics (analyst|role|job)|insights analyst/],
+  ["pm", /product manag|\bapm\b|product owner|\bpm (role|job|intern)/],
+  ["tpm", /technical product|\btpm\b|platform product|technical program/],
+  ["prodstrat", /product strategy|strategy (and|&) ops|product ops|chief of staff|bizops|business strategy/],
+  ["finance", /corporate finance|\bfp&a\b|financial analyst|treasury|financial planning|strategic finance/],
+];
+const TRACK_CATS = ["Data & Analytics", "AI & Data Science", "Product", "Quant & Finance", "Investment Banking", "Asset Mgmt & PE", "Corporate Finance"];
+const trackAsk = (text) => TRACK_ASK.filter(([, re]) => re.test(text.toLowerCase())).map(([id]) => id);
 function localFilters(message, current) {
   const full = message.toLowerCase().replace(/[’']/g, "'");
   const base = /start over|new search|instead|forget|reset/.test(full) ? blank() : { ...blank(), ...current };
@@ -1216,6 +1317,7 @@ function localFilters(message, current) {
   if (/\bresearch(er)? (role|position|intern)/.test(m)) cats.add("Research");
   if (/marketing/.test(m)) cats.add("Marketing");
   for (const c of neg.cats) cats.delete(c);
+  if (trackAsk(message).length) TRACK_CATS.forEach((c) => cats.delete(c)); // a named track says it better than a broad category
   const industries = Object.entries(INDUSTRIES).filter(([, d]) => d.ask.test(m)).map(([k]) => k);
   const boost = BOOST_PHRASES.filter((b) => m.includes(b) && !industries.some((i) => i.toLowerCase().includes(b)));
   for (const [re, phrase] of [[/product manag/, "product manag"], [/program manag/, "program manag"], [/project manag/, "project manag"], [/data analy/, "data analy"], [/business analy/, "business analy"], [/data scien/, "data scien"]]) if (re.test(m)) boost.unshift(phrase);
@@ -1234,6 +1336,7 @@ function localFilters(message, current) {
     industries: industries.length ? industries : base.industries || [],
     boost: [...new Set([...(base.boost || []), ...boost])],
     categories: cats.size ? [...cats] : base.categories.filter((c) => !neg.cats.includes(c)),
+    tracks: trackAsk(message).length ? trackAsk(message) : base.tracks || [], hideSenior: base.hideSenior || false,
     states: anywhere ? [] : states.size ? [...states] : base.states,
     remoteOnly: /not remote|in.?person|on.?site/.test(m) ? false : /remote/.test(m) || (!anywhere && base.remoteOnly),
     season: s ? s[0].replace(/^\w/, (c) => c.toUpperCase()) : /any (time|season)/.test(m) ? "" : base.season,
@@ -1266,6 +1369,10 @@ async function ask(text) {
     return scout({ lines: ["I couldn't reach the job feeds just now. Your search is safe; this is a connection hiccup on my side."], chips: [{ label: "Try again", run: () => ask(lastText) }] });
   }
   const next = { ...blank(), ...r };
+  const fresh = /start over|new search|forget|reset/i.test(text), asked = trackAsk(text);
+  next.tracks = asked.length ? asked : fresh ? [] : r.tracks?.length ? r.tracks : F.tracks;
+  next.hideSenior = fresh ? false : F.hideSenior;
+  if (asked.length) next.categories = (next.categories || []).filter((c) => !TRACK_CATS.includes(c));
   next.states = (next.states || []).map((s) => s.toUpperCase());
   const known = new Set(JOBS.map((j) => j.company.toLowerCase()));
   next.companies = (next.companies || []).filter((c) => known.has(c.toLowerCase()));
@@ -1343,24 +1450,92 @@ $("#savedJobsBtn").onclick = () => { setTab("saved"); openBoard(true); };
 $("#newSearch").onclick = () => { if (!busy) reset(); };
 
 /* ---------------- live board ---------------- */
-function setTab(t) { boardTab = t; boardShown = 30; document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === t)); renderBoard(); }
+function setTab(t) { boardTab = t; boardShown = 40; document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === t)); renderBoard(); }
 document.querySelector(".tabs").addEventListener("click", (e) => { const b = e.target.closest("[data-tab]"); if (b) setTab(b.dataset.tab); });
-let lastBoardCount = 0, filtersOpen = store.get("is-filters-open", true);
+let lastBoardCount = 0, filtersOpen = store.get("is-filters-open", false), lastBoardList = null;
+// The same posting in several offices becomes one row ("+3 more locations"), best-ranked first.
+function collapseDuplicates(list) {
+  const seen = new Map(), out = [];
+  for (const j of list) {
+    let t = j.title;
+    const m = t.match(/\s[-–|]\s*([^-–|]+)$/);
+    if (m && (j.location || "").toLowerCase().includes(m[1].trim().toLowerCase())) t = t.slice(0, m.index);
+    const key = j.company + "|" + t.toLowerCase().replace(/\s+/g, " ").trim();
+    const first = seen.get(key);
+    if (first) { (first._more ||= []).push(j); continue; }
+    j._more = null; seen.set(key, j); out.push(j);
+  }
+  return out;
+}
+function rowWhy(j) {
+  const why = PROFILE && j._why?.[0] ? j._why[0] : "";
+  const tr = trackTags(j, 2).join(" · ");
+  const line = [tr, why && !/strongest tracks/.test(why) ? why : ""].filter(Boolean).join(" · ");
+  return line ? `<small class="rwhy">${esc(line)}</small>` : "";
+}
+function rowHtml(j) {
+  return `
+      <div class="brow"><span class="mono" style="${monoStyle(j.company)}" aria-hidden="true">${esc(j.company[0])}</span>
+        <div class="bt"><a href="${esc(j.url)}" target="_blank" rel="noopener" data-apply="${esc(j.id)}">${esc(j.title)}</a><small>${esc(j.company)} · ${esc(placeOf(j))}${j._more?.length ? ` · +${j._more.length} more location${j._more.length > 1 ? "s" : ""}` : ""}</small><small class="rterm${j.offCycle ? " off" : ""}">${esc(termLine(j) || (j.cycle || []).join(" · ") || (j.kind === "Full-time" ? "Full-time · start date not stated" : "Term not stated"))}${j.term?.source === "description" ? " ✓" : ""}</small>${rowWhy(j)}<small class="host">${lockSvg} ${esc(j.applyHost)}</small></div>
+        <span class="rmeta">${j.pay ? `<span class="rpay ${j.pay.basis}" title="${esc(payDetail(j.pay))}">${esc(payLabel(j.pay, true, j))}</span>` : ""}${PROFILE && j._score != null ? `<span class="rmatch">${j._score}%</span>` : ""}<span class="ago${isNew(j) ? " n" : ""}">${isNew(j) ? "New" : ago(j.postedAt)}</span></span>
+        ${boardTab === "applied" ? `<button type="button" class="unmark" data-applied="${esc(j.id)}">Unmark</button>` : `<button type="button" class="heart" data-save="${esc(j.id)}" aria-pressed="${saved.has(j.id)}" aria-label="Save ${esc(j.title)}">${heartSvg}</button>`}</div>`;
+}
+function appendRows() {
+  const rows = $("#bbody .rows"), btn = $("#bbody [data-more]");
+  if (!rows || !lastBoardList) return;
+  const from = boardShown; boardShown += 40;
+  rows.insertAdjacentHTML("beforeend", lastBoardList.slice(from, boardShown).map(rowHtml).join(""));
+  if (boardShown >= lastBoardList.length) btn?.remove(); else if (btn) btn.textContent = `Show ${fmt(Math.min(40, lastBoardList.length - boardShown))} more`;
+}
+const moreObs = typeof IntersectionObserver === "function" ? new IntersectionObserver((es) => { if (es.some((x) => x.isIntersecting)) appendRows(); }, { rootMargin: "500px" }) : null;
+function watchMore() { moreObs?.disconnect(); const b = $("#bbody [data-more]"); if (b) moreObs?.observe(b); }
+const FOCUS_NAME = { "finance+analytics": "Finance + data", finance: "Finance", analytics: "Data & math", software: "Software", engineering: "Engineering", business: "Business" };
+function newSinceHtml() {
+  if (!SINCE || !loaded) return "";
+  const n = lastBoardList ? lastBoardList.filter((j) => j.postedAt && Date.parse(j.postedAt) > SINCE).length : 0;
+  if (!n) return "";
+  const days = Math.max(1, Math.ceil((Date.now() - SINCE) / 864e5));
+  return `<button type="button" class="newsince" data-since="${days}" title="Show only roles posted since you were last here">✦ ${fmt(n)} new since you last looked</button>`;
+}
+function profileCardHtml() {
+  if (!RESUMES.length) return `<div class="sec myprofile empty"><h5><span>Match to your resume</span></h5>
+    <p class="pfnote">Drop in a resume and I'll set your career tracks, rank every role by fit, and treat whatever you type as extra context.</p>
+    <div class="rpills"><button type="button" class="rp up" data-add-resume>＋ Upload resume</button>${STARTERS.map((st, i) => `<button type="button" class="rp" data-starter="${i}" title="A starter profile built from this resume shape: no names, no contact details">${esc(st.name)}</button>`).join("")}</div></div>`;
+  const P = PROFILE;
+  const pills = RESUMES.map((r) => `<span class="rpw"><button type="button" class="rp" aria-pressed="${ACTIVE === r.id}" data-resume="${r.id}" title="${esc(r.file)}">${esc(r.file.replace(/\.[a-z]+$/i, ""))}${r.preset ? " ·starter" : ""}</button><button type="button" class="rpx" data-resume-del="${r.id}" aria-label="Remove ${esc(r.file)}">×</button></span>`).join("");
+  const all = RESUMES.length > 1 ? `<button type="button" class="rp" aria-pressed="${ACTIVE === "all"}" data-resume="all" title="Search with every resume at once">All ${RESUMES.length}</button>` : "";
+  const bits = [FOCUS_NAME[P.focus], P.degree, P.gradYear ? `Class of ${P.gradYear}` : ""].filter(Boolean);
+  return `<div class="sec myprofile"><h5><span>Searching for you</span><button type="button" class="clear" data-add-resume>+ Add resume</button></h5>
+    <div class="rpills">${pills}${all}</div>
+    <div class="pfline">${esc(bits.join(" · "))}${P.tracks?.length ? `${bits.length ? " · " : ""}${P.tracks.length} tracks` : ""}</div>
+    ${newSinceHtml()}<div class="fitmode" role="group" aria-label="How closely to follow the resume"><button type="button" aria-pressed="${FITMODE === "strict"}" data-fit="strict">Only my tracks</button><button type="button" aria-pressed="${FITMODE === "wide"}" data-fit="wide">Rank everything</button></div></div>`;
+}
+function tracksRowHtml(trCount) {
+  if (!TRACK_LIST.length) return "";
+  const mine = new Set(PROFILE?.tracks || []);
+  const btn = (t) => `<button type="button" aria-pressed="${F.tracks.includes(t.id)}" class="${mine.has(t.id) ? "mine" : ""}" data-facet="tracks" data-val="${t.id}" title="${esc(t.hint)}">${esc(t.label)} <small>${fmt(trCount[t.id] || 0)}</small></button>`;
+  const groups = [...new Set(TRACK_LIST.map((t) => t.group))];
+  return `<div class="sec tracks"><h5><span>Career tracks</span><span>${F.tracks.length ? `${F.tracks.length} picked` : "pick any"}${mine.size ? " · ★ your resume" : ""}</span></h5>${groups.map((g) => `<div class="tgrp"><span class="tgl">${esc(g)}</span><div class="facet">${TRACK_LIST.filter((t) => t.group === g).map(btn).join("")}</div></div>`).join("")}</div>`;
+}
 function renderBoard() {
   const qs = V.q.toLowerCase().split(/\s+/).filter(Boolean);
-  let list = (boardTab === "saved" ? JOBS.filter((j) => saved.has(j.id)) : boardTab === "applied" ? JOBS.filter((j) => applied.has(j.id)) : results()).filter((j) => !qs.length || qs.every((w) => (j.title + " " + j.company + " " + j.location).toLowerCase().includes(w)));
+  let list = (boardTab === "saved" ? JOBS.filter((j) => saved.has(j.id)) : boardTab === "applied" ? JOBS.filter((j) => applied.has(j.id)) : results()).filter((j) => !qs.length || qs.every((w) => (j._q ||= (j.title + " " + j.company + " " + j.location).toLowerCase()).includes(w)));
   if (V.sort === "pay") list = [...list].sort((a, b) => (payMid(b) ?? -1) - (payMid(a) ?? -1));
   if (V.sort === "match" && PROFILE) list = ordered(list);
   else if (V.strongOnly && PROFILE) list = list.filter((j) => (j._score ?? 0) >= 70);
   if (V.sort === "company") list = [...list].sort((a, b) => a.company.localeCompare(b.company) || a.title.localeCompare(b.title));
   if (V.sort === "old") list = [...list].reverse();
+  list = collapseDuplicates(list);
   const bc = $("#bcount"); countTo(bc, lastBoardCount, list.length); lastBoardCount = list.length;
   $("#bcountLbl").textContent = boardTab === "applied" ? (list.length === 1 ? "application sent" : "applications sent") : boardTab === "saved" ? (list.length === 1 ? "saved role" : "saved roles") : isBlank(F) ? (F.kind === "Full-time" ? "open early-career roles" : "open US internships") : (list.length === 1 ? "match" : "matches");
   const body = $("#bbody");
   if (!loaded) { body.innerHTML = `<div class="bempty">Gathering today's listings from every career page I watch…</div>`; return; }
   let html = "";
   if (boardTab === "matches") {
-    const whenBase = JOBS.filter((j) => matches(j, F, "cycle"));
+    const trBase = JOBS.filter((j) => matches(j, F, "tracks")), trCount = {};
+    for (const j of trBase) for (const t of j.tracks || []) trCount[t] = (trCount[t] || 0) + 1;
+    html += profileCardHtml() + tracksRowHtml(trCount);
+    const whenBase = F.kind === "Full-time" ? [] : JOBS.filter((j) => matches(j, F, "cycle"));
     const cnt = (fn) => whenBase.filter(fn).length;
     const isOn = (val) => val === "all" ? !F.offCycle && !F.cycle.length : val === "off" ? F.offCycle : val.split(",").every((c) => F.cycle.includes(c));
     const whenBtn = (val, label, n, hint) => `<button type="button" aria-pressed="${isOn(val)}" data-facet="when" data-val="${val}" title="${hint}"><b>${label}</b><small>${fmt(n)}</small></button>`;
@@ -1395,7 +1570,9 @@ function renderBoard() {
       <div class="spark" role="img" aria-label="Postings per day over the last 14 days: ${days.join(", ")}">${days.map((n, i) => `<i style="height:${Math.max(4, (n / max) * 100)}%" title="${n} posted ${13 - i === 0 ? "today" : 13 - i + "d ago"}"></i>`).join("")}</div>
       <div class="sparkaxis"><span>2 weeks ago</span><span>today</span></div></div>`;
     const pills = [];
+    F.tracks.forEach((t) => pills.push([TRACK_NAME[t] || t, "tracks", t]));
     F.categories.forEach((c) => pills.push([c, "categories", c]));
+    if (F.hideSenior) pills.push(["Entry to mid level", "hideSenior", ""]);
     F.keywords.forEach((k) => pills.push([`“${k}”`, "keywords", k]));
     F.states.forEach((s) => pills.push([STATE_NAMES[s] || s, "states", s]));
     F.companies.forEach((c) => pills.push([c, "companies", c]));
@@ -1417,6 +1594,7 @@ function renderBoard() {
     const fb = (label, n, on, attrs) => `<button type="button" aria-pressed="${on}" ${attrs}>${esc(label)} <small>${fmt(n)}</small></button>`;
     const nActive = pills.length;
     let fx = "";
+    if (filtersOpen) {
     if (F.kind !== "Internship") {
       const lvBase = JOBS.filter((j) => j.kind === "Full-time" && matches(j, F, "level"));
       fx += facet("Experience level", ["Early career", "Mid-level", "Senior", "Leadership"].map((lv) => fb(lv, lvBase.filter((j) => (j.level || "Early career") === lv).length, F.level === lv, `data-facet="level" data-val="${lv}"`)));
@@ -1444,20 +1622,30 @@ function renderBoard() {
     if (PROFILE) fx += facet("Resume", [fb("Strong matches only (70%+)", list.filter((j) => (j._score ?? 0) >= 70).length, V.strongOnly, 'data-facet="strongOnly"')]);
     fx += facet("Posted", [[0, "Any time", dayBase.length], [1, "Today", within(1)], [3, "3 days", within(3)], [7, "This week", within(7)], [30, "This month", within(30)]].map(([d, l, n]) => fb(l, n, F.postedWithinDays === d, `data-facet="postedWithinDays" data-val="${d}"`)));
     fx += facet("Company", tally(JOBS.filter((j) => matches(j, F, "companies")), "company").slice(0, 30).map(([c, n]) => fb(c, n, F.companies.includes(c), `data-facet="companies" data-val="${esc(c)}"`)));
+    }
     html += `<details class="filters" ${filtersOpen ? "open" : ""}><summary><span>Filters${nActive ? ` · ${nActive} on` : ""}</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>${fx}</details>`;
   }
   if (!list.length) html += `<div class="bempty">${boardTab === "saved" ? "Nothing saved yet. Tap the heart on any internship to keep it here." : "Nothing fits every filter right now. Remove one above and watch the board fill back in."}</div>`;
-  else html += `<div class="sec"><h5><span>${boardTab === "applied" ? "You applied to these · click Unmark to bring one back" : boardTab === "saved" ? "Saved" : { new: "Newest first", old: "Oldest first", company: "By company", pay: "Highest pay first", match: "Best fit for your resume" }[V.sort] || "Newest first"}</span><span>${V.q ? `${plural(list.length, "result")} for “${esc(V.q)}”` : ""}</span></h5><div class="rows">${list.slice(0, boardShown).map((j) => `
-      <div class="brow"><span class="mono" style="${monoStyle(j.company)}" aria-hidden="true">${esc(j.company[0])}</span>
-        <div class="bt"><a href="${esc(j.url)}" target="_blank" rel="noopener" data-apply="${esc(j.id)}">${esc(j.title)}</a><small>${esc(j.company)} · ${esc(placeOf(j))}</small><small class="rterm${j.offCycle ? " off" : ""}">${esc(termLine(j) || (j.cycle || []).join(" · ") || (j.kind === "Full-time" ? "Full-time · start date not stated" : "Term not stated"))}${j.term?.source === "description" ? " ✓" : ""}</small><small class="host">${lockSvg} ${esc(j.applyHost)}</small></div>
-        <span class="rmeta">${j.pay ? `<span class="rpay ${j.pay.basis}" title="${esc(payDetail(j.pay))}">${esc(payLabel(j.pay, true, j))}</span>` : ""}${PROFILE && j._score != null ? `<span class="rmatch">${j._score}%</span>` : ""}<span class="ago${isNew(j) ? " n" : ""}">${isNew(j) ? "New" : ago(j.postedAt)}</span></span>
-        ${boardTab === "applied" ? `<button type="button" class="unmark" data-applied="${esc(j.id)}">Unmark</button>` : `<button type="button" class="heart" data-save="${esc(j.id)}" aria-pressed="${saved.has(j.id)}" aria-label="Save ${esc(j.title)}">${heartSvg}</button>`}</div>`).join("")}</div>
+  else html += `<div class="sec"><h5><span>${boardTab === "applied" ? "You applied to these · click Unmark to bring one back" : boardTab === "saved" ? "Saved" : { new: "Newest first", old: "Oldest first", company: "By company", pay: "Highest pay first", match: "Best fit for your resume" }[V.sort] || "Newest first"}</span><span>${V.q ? `${plural(list.length, "result")} for “${esc(V.q)}”` : ""}</span></h5><div class="rows">${list.slice(0, boardShown).map(rowHtml).join("")}</div>
       ${list.length > boardShown ? `<button type="button" class="more" data-more>Show ${fmt(Math.min(30, list.length - boardShown))} more</button>` : ""}</div>`;
+  lastBoardList = list;
   body.innerHTML = html;
+  watchMore();
 }
-$("#bbody").addEventListener("toggle", (e) => { if (e.target.matches?.("details.filters")) { filtersOpen = e.target.open; store.set("is-filters-open", filtersOpen); } }, true);
+$("#bbody").addEventListener("toggle", (e) => {
+  if (!e.target.matches?.("details.filters") || filtersOpen === e.target.open) return;
+  filtersOpen = e.target.open; store.set("is-filters-open", filtersOpen);
+  if (filtersOpen) renderBoard(); // the per-filter counts are only worked out while the panel is open
+}, true);
 $("#bbody").addEventListener("click", (e) => {
-  if (e.target.closest("[data-more]")) { boardShown += 30; return renderBoard(); }
+  const sn = e.target.closest("[data-since]"); if (sn) { F.postedWithinDays = Number(sn.dataset.since); return boardChanged(); }
+  if (e.target.closest("[data-add-resume]")) return $("#resumeFile").click();
+  const stt = e.target.closest("[data-starter]"); if (stt) return useStarter(Number(stt.dataset.starter));
+  const rsm = e.target.closest("[data-resume]"); if (rsm) return selectResume(rsm.dataset.resume);
+  const rdl = e.target.closest("[data-resume-del]"); if (rdl) return deleteResume(rdl.dataset.resumeDel);
+  const fit = e.target.closest("[data-fit]");
+  if (fit) { FITMODE = fit.dataset.fit; store.set("is-fit", FITMODE); if (PROFILE) F.tracks = FITMODE === "strict" && PROFILE.tracks?.length ? [...PROFILE.tracks] : []; return boardChanged(); }
+  if (e.target.closest("[data-more]")) return appendRows();
   if (e.target.closest("[data-clear]")) { F = blank(); return boardChanged(); }
   const u = e.target.closest("[data-unset]");
   if (u) { const k = u.dataset.unset; if (Array.isArray(F[k])) F[k] = F[k].filter((x) => x !== u.dataset.val); else F[k] = blank()[k]; return boardChanged(); }
@@ -1484,7 +1672,7 @@ $("#bbody").addEventListener("click", (e) => {
   }
 });
 function boardChanged() {
-  paintKind(); boardShown = 30; $("#title").textContent = describe(); renderBoard(); if (started) hint(`Board updated: ${plural(results().length, "match", "matches")}. Ask me anything about them.`); }
+  paintKind(); boardShown = 40; $("#title").textContent = describe(); store.set("is-f", F); renderBoard(); if (started) hint(`Board updated: ${plural(results().length, "match", "matches")}. Ask me anything about them.`); }
 
 let boardOpenedOnce = false;
 function openBoardOnce() { if (boardOpenedOnce) return; boardOpenedOnce = true; if (mobile()) hint("Your live board is waiting below. Swipe up to see every match."); else openBoard(true); }
@@ -1493,7 +1681,7 @@ function openBoard(open) {
   else { $("#app").classList.toggle("closed", !open); $("#toggleBoard").setAttribute("aria-expanded", open); store.set("is-board", open); }
 }
 let bqT;
-$("#bq").addEventListener("input", (e) => { clearTimeout(bqT); bqT = setTimeout(() => { V.q = e.target.value.trim(); boardShown = 30; renderBoard(); }, 140); });
+$("#bq").addEventListener("input", (e) => { clearTimeout(bqT); bqT = setTimeout(() => { V.q = e.target.value.trim(); boardShown = 40; renderBoard(); }, 90); });
 $("#bsort").onchange = (e) => { V.sort = e.target.value; renderBoard(); };
 $("#kindsw").addEventListener("click", (e) => { const b = e.target.closest("[data-kind]"); if (!b) return; F.kind = b.dataset.kind; if (F.kind === "Full-time") { F.offCycle = false; F.cycle = []; } boardChanged(); });
 function paintKind() { document.querySelectorAll("#kindsw [data-kind]").forEach((b) => b.setAttribute("aria-checked", b.dataset.kind === (F.kind ?? ""))); }
@@ -1535,39 +1723,41 @@ $("#toggleBoard").onclick = () => openBoard($("#app").classList.contains("closed
 
 /* ---------------- greeting ---------------- */
 const STARTS = [
-  { title: "Build something real", line: "Software, data and AI roles where your work ends up in people's hands.", patch: { categories: ["Software Engineering", "AI & Data Science", "Data & Analytics"] }, lead: "Build something real. I love that. You want work that ships.",
+  { title: "Banking & markets", line: "Investment banking, sales & trading, equity research and quant trading roles.", patch: { tracks: ["ib", "er", "st", "quant"], hideSenior: true, kind: "" }, lead: "Banking and markets: every analyst, associate and trading role I can read, early career first.",
     g: "repeating-linear-gradient(0deg, rgba(255,255,255,.08) 0 1px, transparent 1px 14px), radial-gradient(circle at 78% 22%, #FFC27A 0 9%, transparent 30%), linear-gradient(135deg, #FF7A3D, #E8418F 60%, #8B5CF6)" },
-  { title: "Off the usual cycle", line: "Fall, spring and winter internships, co-ops and part-time roles during school.", patch: { offCycle: true }, lead: "Off the usual cycle. Fewer applicants, and I read each description to confirm the dates.",
+  { title: "Data & product", line: "Data science, data engineering, analytics, product management and product strategy.", patch: { tracks: ["datasci", "dataeng", "dataan", "pm", "tpm", "prodstrat"], hideSenior: true, kind: "" }, lead: "Data and product, every flavor from analyst to technical PM.",
     g: "radial-gradient(circle at 72% 28%, #FFE3A8 0 11%, transparent 12%), conic-gradient(from 210deg at 30% 110%, #3B2A6B, #8B5CF6, #E8418F, #FFB25E, #3B2A6B)" },
-  { title: "From my couch, please", line: "Remote-friendly internships anywhere in the US.", patch: { remoteOnly: true }, lead: "From your couch. Honestly, a great commute.",
+  { title: "Private markets", line: "Private credit, alternative credit and alternative investments at funds and lenders.", patch: { tracks: ["privcredit", "altcredit", "altinv"], hideSenior: true, kind: "" }, lead: "Private markets: credit funds, lenders and alternatives managers.",
     g: "radial-gradient(ellipse at 30% 80%, #4FD8B4 0 18%, transparent 45%), radial-gradient(circle at 75% 30%, #6AB0FF 0 10%, transparent 34%), linear-gradient(150deg, #3B2A6B, #8B5CF6 55%, #2FB394)" },
 ];
 function greetCopy() {
   const h = new Date().getHours();
   if (h < 5) return ["Late night", "Still up? <em>Me too.</em>"];
   if (h < 12) return ["Morning", "Good morning. Let's find your <em>next move.</em>"];
-  if (h < 18) return ["Afternoon", "Good afternoon. Let's find your <em>internship.</em>"];
-  return ["Evening", "Good evening. Let's find your <em>summer.</em>"];
+  if (h < 18) return ["Afternoon", "Good afternoon. Let's find your <em>next role.</em>"];
+  return ["Evening", "Good evening. Let's find your <em>next role.</em>"];
 }
 function greet() {
   const [when, line] = greetCopy();
   const el = document.createElement("section"); el.className = "hello msg"; el.id = "hello";
   el.innerHTML = `<div class="when"><span class="pulse${loaded ? "" : " off"}"></span>${when} · Scout is watching the market</div>
     <h1>${line}</h1>
-    <p>I track open US internships at <span id="srcCount">hundreds of</span> employers, ${SNAP ? "gathered into this snapshot" : "check for new ones every 10 minutes"}, and send you straight to each company's own application. Tell me what you're hoping for, even if it's fuzzy.</p>
+    <p>I track open US internships and early-career jobs at <span id="srcCount">hundreds of</span> employers, ${SNAP ? "gathered into this snapshot" : "check for new ones every 10 minutes"}, and send you straight to each company's own application. Tell me what you're hoping for, even if it's fuzzy.</p>
     <div class="stats" id="stats"></div>
     <div class="starts">${STARTS.map((s, i) => `<button type="button" class="start glass" style="--g:${s.g}" data-start="${i}"><span class="count num" data-start-count="${i}">…</span><b>${esc(s.title)}</b><span>${esc(s.line)}</span></button>`).join("")}</div>
     <div class="fresh"><h2><span class="pulse"></span>Just posted</h2><div class="fresh-row" id="freshRow"></div></div>`;
   el.querySelectorAll("[data-start]").forEach((b) => (b.onclick = () => { const s = STARTS[b.dataset.start]; refine(s.title, s.patch, s.lead); }));
   thread.appendChild(el); paintGreeting();
+  const track = (label, tracks, lead) => ({ label, run: () => refine(label, { tracks, kind: "", hideSenior: true }, lead) });
   setChips([
     ...(PROFILE ? [{ label: `Best matches for ${PROFILE.file.replace(/\.[a-z]+$/i, "")}`, run: () => refine("Show my best matches", {}, "Here are the roles that fit your resume best.") }] : []),
-    { label: "Software internships in California", run: () => ask("Software engineering internships in California") },
-    { label: "PhD research roles", run: () => ask("PhD research internships") },
-    { label: "Design internships", run: () => ask("Product design internships") },
     { label: "📄 Match my resume", run: () => $("#resumeFile").click() },
-    { label: "New grad full-time roles", run: () => refine("New grad full-time roles", { kind: "Full-time", level: "Early career" }, "Full-time, early career. Your first real job, right here.") },
-    { label: "Product management jobs", run: () => refine("Product management jobs", { kind: "Full-time", categories: ["Product"] }, "Product management, every level from associate PM to VP of Product.") },
+    ...(PROFILE ? [] : STARTERS.map((st, i) => ({ label: `Start from: ${st.name}`, run: () => useStarter(i) }))),
+    track("Investment banking", ["ib"], "Investment banking: analysts, associates and summer programs."),
+    track("Quant trading", ["quant"], "Quant trading and research, at the firms that hire for it."),
+    track("Data science", ["datasci"], "Data science, from analyst-scientist to machine learning."),
+    track("Product management", ["pm", "tpm"], "Product management, including technical PM."),
+    track("Private credit", ["privcredit", "altcredit"], "Private and alternative credit."),
   ]);
 }
 function paintGreeting() {
@@ -1591,7 +1781,39 @@ function reset() {
    The resume is read in the browser. Only the derived profile (skills, degree, graduation
    year, areas) is kept, in this browser. On a live server with an API key the text is also
    sent once to the server so Claude can read it more carefully; it is not stored there. */
-let PROFILE = store.get("is-profile", null);
+// Up to four resumes are kept in this browser; one is active (or "all" to search with every one at once).
+// When you last looked: a new session starts after 30 idle minutes, and "new" means posted since the previous one.
+const SINCE = (() => {
+  const now = Date.now(), seen = store.get("is-seen", 0), since = store.get("is-since", 0);
+  store.set("is-seen", now);
+  if (now - seen > 30 * 60 * 1000 && seen) { store.set("is-since", seen); return seen; }
+  return since;
+})();
+let RESUMES = (() => {
+  const list = store.get("is-resumes", null);
+  if (Array.isArray(list)) return list;
+  const old = store.get("is-profile", null);
+  return old ? [{ id: "r" + Date.now().toString(36), file: old.file || "Resume", profile: old }] : [];
+})();
+let ACTIVE = store.get("is-active", "");
+if (ACTIVE !== "all" && !RESUMES.some((r) => r.id === ACTIVE)) ACTIVE = RESUMES[0]?.id || "";
+let FITMODE = store.get("is-fit", "strict"); // strict: only the resume's tracks; wide: everything, ranked by fit
+function mergedProfile(list) {
+  const ps = list.map((r) => r.profile);
+  const count = (f) => { const m = new Map(); for (const p of ps) for (const x of f(p) || []) m.set(x, (m.get(x) || 0) + 1); return [...m].sort((a, b) => b[1] - a[1]).map(([x]) => x); };
+  const tw = {}; for (const p of ps) for (const [t, w] of Object.entries(p.trackWeights || {})) tw[t] = Math.max(tw[t] || 0, w);
+  const areas = {}; for (const p of ps) for (const [k, n] of Object.entries(p.areas || {})) areas[k] = Math.max(areas[k] || 0, n);
+  const tracks = Object.entries(tw).sort((a, b) => b[1] - a[1]).filter(([, w]) => w >= 0.4).map(([t]) => t).slice(0, 9);
+  return { ...ps[0], file: "All resumes", skills: count((p) => p.skills), areas, categories: count((p) => p.categories).slice(0, 6), tracks, trackWeights: tw, gradYear: Math.max(...ps.map((p) => p.gradYear || 0)) || 0, bookedSeasons: count((p) => p.bookedSeasons), states: count((p) => p.states), degree: ps.find((p) => p.degree)?.degree || "", summary: "" };
+}
+function currentProfile() {
+  if (!RESUMES.length) return null;
+  if (ACTIVE === "all" && RESUMES.length > 1) return mergedProfile(RESUMES);
+  const r = RESUMES.find((x) => x.id === ACTIVE) || RESUMES[0];
+  return { ...r.profile, file: r.file };
+}
+function saveResumes() { store.set("is-resumes", RESUMES); store.set("is-active", ACTIVE); }
+let PROFILE = currentProfile();
 // Skill areas: words that show up in resumes, and words that show up in matching job titles.
 const AREAS = {
   frontend: { cat: "Software Engineering", skills: ["javascript", "typescript", "react", "next.js", "vue", "angular", "html", "css", "tailwind", "svelte", "redux", "web development"], titles: ["frontend", "front end", "front-end", "web", "ui engineer", "full stack", "fullstack", "full-stack"] },
@@ -1622,6 +1844,40 @@ const SKILL_RE = SKILL_WORDS.map((w) => [w, new RegExp(`(^|[^a-z0-9+#.])${escRe(
 const GENERIC_TITLES = new Set(["software engineer", "software developer", "swe", "platform", "engineer", "product", "design", "data", "business", "finance", "server", "api"]);
 const SKILL_NAMES = { go: "Go", golang: "Go", fastapi: "FastAPI", typescript: "TypeScript", javascript: "JavaScript", postgresql: "PostgreSQL", mysql: "MySQL", mongodb: "MongoDB", pytorch: "PyTorch", tensorflow: "TensorFlow", "scikit-learn": "scikit-learn", sklearn: "scikit-learn", aws: "AWS", gcp: "GCP", sql: "SQL", "node.js": "Node.js", node: "Node.js", "next.js": "Next.js", "c++": "C++", "c#": "C#", ".net": ".NET", ios: "iOS", swiftui: "SwiftUI", nlp: "NLP", llm: "LLMs", "ci/cd": "CI/CD", ux: "UX", ui: "UI", "power bi": "Power BI", graphql: "GraphQL", rest: "REST APIs", css: "CSS", html: "HTML", fpga: "FPGA", asic: "ASIC", vhdl: "VHDL", rtos: "RTOS", dsp: "DSP", pcb: "PCB", cad: "CAD", fea: "FEA", cfd: "CFD", ros: "ROS", matlab: "MATLAB", "github actions": "GitHub Actions", "a/b testing": "A/B testing", dcf: "DCF models", cfa: "CFA", "m&a": "M&A", lbo: "LBO", "fp&a": "FP&A", fx: "FX", sie: "SIE", gaap: "GAAP", ifrs: "IFRS", cpa: "CPA", aml: "AML", kyc: "KYC", sox: "SOX", npv: "NPV", irr: "IRR", wacc: "WACC", sap: "SAP", sas: "SAS", vita: "VITA", bloomberg: "Bloomberg", "capital iq": "Capital IQ", factset: "FactSet", pitchbook: "PitchBook", kdb: "kdb+", opencv: "OpenCV", cuda: "CUDA", r: "R", c: "C", ai: "AI", jax: "JAX", etl: "ETL", rf: "RF", "hugging face": "Hugging Face", "react native": "React Native", solidworks: "SolidWorks", autocad: "AutoCAD", ansys: "ANSYS", systemverilog: "SystemVerilog", verilog: "Verilog" };
 const prettySkill = (s) => SKILL_NAMES[s] || s.replace(/\b\w/g, (c) => c.toUpperCase());
+// Which career tracks a resume points to: phrases, plus each role title judged with the same rules the listings use.
+function trackProfile(text, finField, dataField) {
+  const low = " " + text.toLowerCase().replace(/\s+/g, " ") + " ";
+  const sc = {};
+  for (const [id, sigs] of Object.entries(TRACK_SIGNALS)) {
+    let sum = 0;
+    for (const [term, w] of sigs) {
+      let n = 0, i = -1;
+      while ((i = low.indexOf(term, i + 1)) >= 0) {
+        const a = low[i - 1] || " ", b = low[i + term.length] || " ";
+        if (/[a-z0-9]/.test(a) || (term.length <= 4 && /[a-z0-9]/.test(b))) continue; // whole words only for short terms
+        if (++n >= 3) break;
+      }
+      if (n) sum += w * (n >= 3 ? 1.5 : 1);
+    }
+    sc[id] = sum;
+  }
+  if (typeof tracksOf === "function") for (const line of text.split(/\n|\.\s|\|/)) {
+    const l = line.trim();
+    if (l.length < 8 || l.length > 160 || !/\b(intern|analyst|associate|scientist|engineer|manager|developer|researcher|trader|summer)\b/i.test(l)) continue;
+    for (const t of tracksOf(l, "", "")) sc[t] = (sc[t] || 0) + 5;
+  }
+  if (finField) for (const [t, b] of [["ib", 5], ["er", 4], ["altinv", 4], ["privcredit", 3], ["st", 3], ["finance", 3]]) sc[t] = (sc[t] || 0) + b;
+  if (dataField) for (const [t, b] of [["datasci", 3], ["dataan", 2], ["quant", 3]]) sc[t] = (sc[t] || 0) + b;
+  let ranked = Object.entries(sc).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+  if (!ranked.length) return { tracks: [], trackWeights: {} };
+  // a resume has one main direction; tracks from the other groups (finance, markets, data & product) count less
+  const grp = (id) => TRACK_LIST.find((t) => t.id === id)?.group, topGroup = grp(ranked[0][0]);
+  if (topGroup) ranked = ranked.map(([t, v]) => [t, grp(t) === topGroup ? v : v * 0.6]).sort((a, b) => b[1] - a[1]);
+  const max = ranked[0][1];
+  let tracks = ranked.filter(([, v]) => v >= Math.max(7, max * 0.25)).slice(0, 7).map(([t]) => t);
+  if (tracks.length < 3) tracks = ranked.slice(0, 3).map(([t]) => t);
+  return { tracks, trackWeights: Object.fromEntries(ranked.slice(0, 10).map(([t, v]) => [t, Math.round(Math.min(1, v / max) * 100) / 100])) };
+}
 function profileFromText(text) {
   const t = " " + text.replace(/\s+/g, " ") + " ";
   const skills = SKILL_RE.filter(([w, re]) => (w.length > 2 || w === "go" ? re.test(t) : new RegExp(`[\\s,;(|/•·]${escRe(w)}[\\s,;)|/•·]`, "i").test(t))).map(([w]) => w.toLowerCase());
@@ -1668,7 +1924,14 @@ function profileFromText(text) {
   // Finance first, with analytics roles as a strong second lane rather than the whole list.
   if (focus === "finance+analytics" && !categories.includes("Data & Analytics")) categories.splice(Math.min(3, categories.length), 0, "Data & Analytics");
   if (focus.startsWith("finance")) categories.splice(0, categories.length, ...new Set(categories.filter((c) => FINCAT.has(c) || c === "Data & Analytics" || c === "Product" || c === "Business & Ops")).values());
-  return { name: "", skills, areas, categories, degree, major, gradYear, states, focus, roles: [], summary: "" };
+  const bookedSeasons = [];
+  for (const m of t.matchAll(/incoming\b(.{0,140})/gi)) {
+    const w = m[1], y = (w.match(/\b(20[2-3]\d)\b/) || [])[1]; if (!y) continue;
+    const mon = (w.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b/i) || [])[1]?.toLowerCase();
+    const season = /summer/i.test(w) ? "Summer" : mon ? (["may", "jun", "jul", "aug"].includes(mon) ? "Summer" : ["sep", "oct", "nov", "dec"].includes(mon) ? "Fall" : "Spring") : "";
+    if (season && !bookedSeasons.includes(`${season} ${y}`)) bookedSeasons.push(`${season} ${y}`);
+  }
+  return { name: "", skills, areas, categories, degree, major, gradYear, states, focus, roles: [], summary: "", bookedSeasons, ...trackProfile(text, finField, dataField) };
 }
 
 function scoreJob(j, P) {
@@ -1676,7 +1939,7 @@ function scoreJob(j, P) {
   const why = [];
   let score = 0;
   const ci = P.categories.indexOf(j.category);
-  if (ci >= 0) score += [34, 28, 22, 16, 10][ci] ?? 8;
+  if (ci >= 0) score += ([34, 28, 22, 16, 10][ci] ?? 8) * (P.tracks?.length ? 0.4 : 1);
   // title words that line up with the areas this resume is strongest in; a specific
   // title word ("machine learning") counts for more than a generic one ("software engineer")
   let areaPts = 0, bestArea = null;
@@ -1688,6 +1951,16 @@ function scoreJob(j, P) {
     if (pts > areaPts) { areaPts = pts; bestArea = k; }
   }
   score += areaPts;
+  // the strongest of the resume's tracks that this job belongs to
+  let trackBest = 0, trackId = "";
+  if (P.trackWeights && j.tracks?.length) for (const t of j.tracks) { const w = P.trackWeights[t] || 0; if (!w) continue; const a = w + (SPECIFIC_TRACKS.has(t) ? 0.16 : 0); if (a > trackBest) { trackBest = a; trackId = t; } }
+  if (trackBest) { score += Math.round(14 + 34 * Math.min(1, trackBest)); why.push(`${TRACK_NAME[trackId] || trackId} is one of your strongest tracks`); }
+  else if (P.tracks?.length) score -= 6;
+  // a recognized financial employer for finance resumes; pay as a gentle signal; a summer you've already booked
+  if (P.tracks?.some((t) => FINANCE_TRACKS.has(t)) && typeof finCo === "function" && finCo(j.company)) score += 8;
+  const hr = payMid(j);
+  if (hr != null && hr > 0) { if (hr >= 30) score += 3; else if (hr < 15) score -= 6; }
+  if (P.bookedSeasons?.length && j.kind === "Internship" && j.seasons?.length && j.seasons.every((x) => P.bookedSeasons.includes(x))) score -= 30;
   const named = (P.skills || []).filter((s) => s.length > 2 && title.includes(s)).slice(0, 2);
   if (named.length) score += 8;
   // cite the skills of the field the job is actually in before generic tools
@@ -1715,7 +1988,7 @@ function scoreJob(j, P) {
   const FINCATS = ["Investment Banking", "Quant & Finance", "Asset Mgmt & PE", "Corporate Finance", "Accounting & Audit", "Risk & Insurance"];
   if (focus.startsWith("finance")) {
     const finTitle = /\b(financ\w*|invest\w*|bank\w*|equity|capital markets|m&a|merger\w*|trading|trader|markets|portfolio|private equity|asset management|wealth|credit|treasury|fp&a|audit\w*|account\w*|tax|risk|underwrit\w*|actuar\w*|valuation|quant\w*|securities|fixed income|derivatives|lending|summer analyst|strategist)\b/i;
-    if (FINCATS.includes(j.category) || finTitle.test(j.title)) { score += 20; why.unshift("Fits your finance background"); }
+    if ((FINCATS.includes(j.category) || finTitle.test(j.title)) && (!P.tracks?.length || P.tracks.some((t) => FINANCE_TRACKS.has(t)))) { score += 20; why.unshift("Fits your finance background"); }
     else if (focus === "finance+analytics" && /\b(analyst|analytics|data scien\w*|data|insights?|research|modeling|forecast\w*)\b/i.test(j.title)) { score += 8; why.push("Uses your data and math side"); }
     if (j.category === "Software Engineering" || j.category === "Hardware") score -= 28;
     else if (/\bengineer\w*\b/i.test(j.title) && !/\b(data|analytics|quant\w*|financ\w*)\b/i.test(j.title)) score -= 22;
@@ -1725,17 +1998,19 @@ function scoreJob(j, P) {
     if (/\bengineer\w*\b/i.test(j.title) && !/\b(data|analytics|machine learning|ml|ai)\b/i.test(j.title)) score -= 40;
     if (j.category === "Software Engineering" || j.category === "Hardware") score -= 15;
   }
-  return { score: Math.max(1, Math.min(99, Math.round(score * 0.92))), why: why.slice(0, 3) };
+  return { score: Math.max(1, Math.round(99 * (1 - Math.exp(-Math.max(0, score) / 62)))), rank: score, why: why.slice(0, 3) };
 }
 function rescore() {
   if (!PROFILE) { for (const j of JOBS) { delete j._score; delete j._why; } return; }
-  for (const j of JOBS) { const r = scoreJob(j, PROFILE); j._score = r.score; j._why = r.why; }
+  for (const j of JOBS) { const r = scoreJob(j, PROFILE); j._score = r.score; j._rank = r.rank; j._why = r.why; }
 }
 function ordered(list) {
-  if ((F.boost?.length || F.industries?.length) && !PROFILE) return [...list].sort((a, b) => relevance(b) - relevance(a) || (b.postedAt || "").localeCompare(a.postedAt || ""));
-  if (!PROFILE) return list;
-  let out = [...list].sort((a, b) => (b._score ?? 0) + relevance(b) * 4 - (a._score ?? 0) - relevance(a) * 4 || (b.postedAt || "").localeCompare(a.postedAt || ""));
-  if (V.strongOnly) out = out.filter((j) => (j._score ?? 0) >= 70);
+  const key = PROFILE ? (j) => (j._rank ?? 0) + relevance(j) * 4 : (F.boost?.length || F.industries?.length) ? (j) => relevance(j) : null;
+  if (!key) return list;
+  const dec = list.map((j) => [key(j), j.postedAt || "", j]);
+  dec.sort((a, b) => b[0] - a[0] || (a[1] < b[1] ? 1 : a[1] > b[1] ? -1 : 0));
+  let out = dec.map((x) => x[2]);
+  if (PROFILE && V.strongOnly) out = out.filter((j) => (j._score ?? 0) >= 70);
   return out;
 }
 function matchChip(j) {
@@ -1772,7 +2047,7 @@ async function handleResume(file) {
   addUser(`📄 ${file.name}`);
   let text = "";
   try {
-    text = await withThinking(["Reading your resume", "Finding your strengths", "Matching you to every opening"], async () => (await readResumeFile(file)).slice(0, 60000), 1400);
+    text = await withThinking(["Reading your resume", "Finding your tracks", "Matching you to every opening"], async () => (await readResumeFile(file)).slice(0, 60000), 400);
   } catch {
     return scout({ lines: ["I couldn't open that file. If it's a scanned image, try exporting your resume as a text-based PDF or a .docx, and I'll read it right away."], chips: [{ label: "Try another file", run: () => $("#resumeFile").click() }] });
   }
@@ -1784,18 +2059,45 @@ async function handleResume(file) {
       if (r.profile) P = { ...P, ...r.profile, skills: [...new Set([...r.profile.skills.map((s) => s.toLowerCase()), ...P.skills])], areas: P.areas, categories: r.profile.categories.length ? r.profile.categories : P.categories, gradYear: r.profile.gradYear || P.gradYear, states: r.profile.states.length ? r.profile.states : P.states };
     } catch {}
   }
-  if (!P.skills.length && !P.categories.length) return scout({ lines: ["I read your resume but couldn't pick out specific skills. Try telling me what you're good at, like “Python, React and SQL”, and I'll match from there."] });
-  PROFILE = { ...P, file: file.name, at: new Date().toISOString() };
-  store.set("is-profile", PROFILE);
-  applyProfile();
+  if (!P.skills.length && !P.categories.length && !P.tracks?.length) return scout({ lines: ["I read your resume but couldn't pick out specific skills. Try telling me what you're good at, like “Python, React and SQL”, and I'll match from there."] });
+  await adoptResume(file.name, P, { preset: false });
+}
+async function adoptResume(name, P, { preset = false } = {}) {
+  const entry = { id: "r" + Date.now().toString(36), file: name, profile: { ...P, at: new Date().toISOString() }, preset };
+  RESUMES = [...RESUMES.filter((r) => r.file !== name), entry].slice(-4);
+  ACTIVE = entry.id; saveResumes(); PROFILE = currentProfile();
   const before = results().length;
-  if (P.degree) F.degree = P.degree;
+  adoptProfile(); applyProfile();
   answered.add("level"); answered.add("what");
-  const strong = JOBS.filter((j) => j._score >= 70 && matches(j)).length;
-  const topAreas = Object.entries(P.areas || {}).sort((a, b) => b[1] - a[1]).map(([k]) => k);
-  const top = [...new Set(topAreas.flatMap((k) => AREAS[k].skills.filter((x) => P.skills.includes(x))))].slice(0, 4).map(prettySkill);
-  await present({ lead: P.summary || `I read your resume${P.major ? `, ${P.major}` : ""}${P.gradYear ? `, graduating ${P.gradYear}` : ""}. You're strongest in ${top.join(", ")}. I ranked every internship by how well it fits you: ${plural(strong, "strong match", "strong matches")}.`, before });
+  const n = results().length, strong = JOBS.filter((j) => j._score >= 70 && matches(j)).length;
+  const labels = (PROFILE.tracks || []).slice(0, 4).map((t) => TRACK_NAME[t]).filter(Boolean);
+  const who = preset ? `the ${name} starter profile` : "your resume";
+  const lead = P.summary || `I read ${who}${P.gradYear ? `, class of ${P.gradYear}` : ""}. ${labels.length ? `It points to ${labels.length > 1 ? labels.slice(0, -1).join(", ") + " and " + labels.at(-1) : labels[0]}, so I set the board to those tracks` : "I ranked every role by how well it fits"}: ${plural(n, "role")}, ${plural(strong, "strong match", "strong matches")}. Add or drop tracks on the board, or just tell me where and when.`;
+  await present({ lead, before });
   milestone("Resume matched. Best fits first.");
+}
+function useStarter(i) {
+  if (busy) return;
+  const st = STARTERS[i]; removeHello(); started = true; sfx("tap"); addUser(`Use the ${st.name} starter profile`);
+  return adoptResume(st.name, profileFromText(st.text), { preset: true });
+}
+// Point the search at the active resume. What you typed (places, industries) stays.
+function adoptProfile() {
+  const P = PROFILE; if (!P) return;
+  F.kind = ""; F.hideSenior = true;
+  F.tracks = FITMODE === "strict" && P.tracks?.length ? [...P.tracks] : [];
+  if (P.degree) F.degree = P.degree;
+}
+function selectResume(id) {
+  ACTIVE = id; saveResumes(); PROFILE = currentProfile(); adoptProfile(); applyProfile(); boardChanged();
+  toast(`Matching to ${PROFILE.file}`);
+}
+function deleteResume(id) {
+  RESUMES = RESUMES.filter((r) => r.id !== id);
+  if (ACTIVE === id || !RESUMES.length) ACTIVE = RESUMES[0]?.id || "";
+  saveResumes(); PROFILE = currentProfile();
+  if (PROFILE) adoptProfile(); else { F.tracks = []; F.hideSenior = false; }
+  applyProfile(); boardChanged();
 }
 
 function applyProfile() {
@@ -1804,12 +2106,14 @@ function applyProfile() {
   if (PROFILE) { V.sort = "match"; $("#bsort").value = "match"; }
   else if (V.sort === "match") { V.sort = "new"; $("#bsort").value = "new"; }
   $("#resumeBtn").setAttribute("aria-pressed", !!PROFILE);
-  $("#resumeTip").innerHTML = PROFILE ? `Matching to ${esc(PROFILE.file)}<small>Click to replace · shift-click to remove</small>` : "Match my resume<small>PDF, Word or text</small>";
+  $("#resumeTip").innerHTML = PROFILE ? `Matching to ${esc(PROFILE.file)}<small>Click to add a resume · shift-click to remove</small>` : "Match my resume<small>PDF, Word or text</small>";
+  $("#title").textContent = describe();
+  paintKind();
   renderBoard();
 }
 $("#resumeFile").addEventListener("change", (e) => { const f = e.target.files[0]; e.target.value = ""; handleResume(f); });
 $("#resumeBtn").onclick = (e) => {
-  if (e.shiftKey && PROFILE) { PROFILE = null; store.set("is-profile", null); applyProfile(); toast("Resume removed from this browser."); return; }
+  if (e.shiftKey && PROFILE) { deleteResume(ACTIVE === "all" ? RESUMES.at(-1).id : ACTIVE); toast("Resume removed from this browser."); return; }
   $("#resumeFile").click();
 };
 $("#attach").onclick = () => $("#resumeFile").click();
@@ -1875,7 +2179,8 @@ setInterval(liveLabel, 30000);
 
 /* ---------------- boot ---------------- */
 if (!mobile() && (store.get("is-board", innerWidth > 1240) === false || (innerWidth <= 1240 && store.get("is-board", null) === null))) openBoard(false);
-greet(); renderBoard(); renderRail(); load().then(() => PROFILE && applyProfile());
+greet(); renderBoard(); renderRail();
+load().then(() => { if (PROFILE) { const sf = store.get("is-f", null); if (sf) F = { ...blank(), ...sf }; else adoptProfile(); applyProfile(); } });
 })();
 </script>
 </body>

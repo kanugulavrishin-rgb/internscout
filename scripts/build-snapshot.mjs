@@ -4,13 +4,15 @@
 const standalone = process.argv.includes("--standalone");
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { gzipSync } from "node:zlib";
+import { pack } from "../lib/pack.js";
+import { pageHtml } from "../lib/page.js";
 
 const base = process.env.SERVER || "http://localhost:3000";
 const { jobs, status } = await (await fetch(`${base}/api/jobs`)).json();
-const slim = jobs.map(({ alsoOn, source, location, ...j }) => ({ ...j, location }));
-const snapshot = { jobs: slim, status: { lastRefresh: status.lastRefresh, total: slim.length } };
+const slim = jobs;
+const snapshot = pack(jobs, { lastRefresh: status.lastRefresh, total: jobs.length });
 
-let html = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
+let html = await pageHtml();
 // The artifact host supplies the document skeleton, so keep only the page content there.
 if (!standalone) html = html
   .replace(/<!doctype html>\s*/i, "")

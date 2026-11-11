@@ -5,6 +5,8 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { posted, parsePay, htmlToText, applyEstimates } from "./lib/pay.js";
 import { PayResearch } from "./lib/research.js";
 import { termsFrom, cycleOf, termText } from "./lib/terms.js";
+import { tracksOf, collectableTrack } from "./lib/tracks.js";
+import { pageHtml } from "./lib/page.js";
 import path from "node:path";
 import { gzipSync, gunzipSync } from "node:zlib";
 import Anthropic from "@anthropic-ai/sdk";
@@ -161,13 +163,15 @@ const FAMILIES = {
 const ACTIVE_FAMILIES = (process.env.FULLTIME_FAMILIES || Object.keys(FAMILIES).join(",")).split(",").map((f) => FAMILIES[f.trim()]).filter(Boolean);
 const NOT_FULLTIME = /\b(part[- ]time|contract(?:or)?|temporary|temp\b|freelance|volunteer|seasonal|per diem)\b/i;
 // "Internship", "Full-time" or null for everything else.
-function kindOf(title, hint) {
+function kindOf(title, hint, company = "") {
   if (INTERN_RE.test(title)) return "Internship";
   // "Strategy & Project Management - Summer 2027": a dated summer/fall/spring program is an internship
   if (/\b(summer|fall|spring|winter)\s+20\d\d\b/i.test(title) && !NEWGRAD_RE.test(title) && !/\bfull[- ]time\b/i.test(title)) return "Internship";
   if (hint) return hint;
   if (NEWGRAD_RE.test(title) && !SENIOR_RE.test(title)) return "Full-time";
   if (!NOT_FULLTIME.test(title) && ACTIVE_FAMILIES.some((re) => re.test(title))) return "Full-time";
+  // roles in the career tracks (data science, quant, private credit...) at the levels a student or new grad might take
+  if (!NOT_FULLTIME.test(title) && levelOf(title) !== "Leadership" && collectableTrack(title, company)) return "Full-time";
   return null;
 }
 // Experience level of a full-time role, from its title.
@@ -180,7 +184,7 @@ function levelOf(title) {
 
 function normalize({ source, company, title, location, url, postedAt, remoteFlag, trusted, category, seasons, degrees, sponsorship, kind: kindHint }) {
   title = (title || "").trim();
-  const kind = kindOf(title, kindHint || (trusted ? "Internship" : null));
+  const kind = kindOf(title, kindHint || (trusted ? "Internship" : null), company);
   if (!kind) return null;
   const loc = parseLocation(location);
   if (remoteFlag) loc.remote = true;
@@ -196,6 +200,7 @@ function normalize({ source, company, title, location, url, postedAt, remoteFlag
     postedAt: postedAt ? new Date(postedAt).toISOString() : null,
     states: loc.states, remote: loc.remote,
     category: category || classify(title),
+    tracks: tracksOf(title, company || "", category || classify(title)),
     seasons: [],
     degrees: degrees?.length ? degrees : degreesFrom(title),
     sponsorship: SPONSORSHIP[sponsorship] || "Not stated",
@@ -330,11 +335,12 @@ function workdayDate(s = "") {
   const m = s.match(/(\d+)\+?\s*days?/i);
   return m ? new Date(Date.now() - Number(m[1]) * 864e5) : null;
 }
+const TRACK_SEARCHES = ["investment banking", "equity research", "private credit", "private equity", "sales and trading", "quantitative", "credit analyst", "asset management", "data scientist", "data engineer", "data analyst", "technical product manager", "trader"];
 async function fromWorkday({ host, tenant, site, company }) {
   const api = `https://${host}/wday/cxs/${tenant}/${site}`;
   const postings = [], seenPaths = new Set();
   // "intern" finds intern/internship; "summer co-op" finds Summer Analyst programs and co-ops.
-  for (const searchText of ["intern", "summer co-op", "summer analyst", "new graduate", "entry level", "product manager", "program manager", "analyst", "financial analyst", "associate"]) {
+  for (const searchText of ["intern", "summer co-op", "summer analyst", "new graduate", "entry level", "product manager", "program manager", "analyst", "financial analyst", "associate", "data scientist", "data engineer"]) {
     if (["summer co-op", "summer analyst", "new graduate", "entry level"].includes(searchText) && !postings.length) continue; // quiet for students: skip student searches
     for (let offset = 0; offset < 400; offset += 20) {
       const page = await postJSON(`${api}/jobs`, { appliedFacets: {}, limit: 20, offset, searchText });
@@ -342,9 +348,21 @@ async function fromWorkday({ host, tenant, site, company }) {
       if (!page.jobPostings?.length || offset + 20 >= (page.total || 0)) break;
     }
   }
+  // Financial employers (and any board that already shows career-track roles) also get the
+  // specific searches: banking, research, credit, trading, data and product roles.
+  const finFirm = /\b(bank|banc|capital|securities|invest\w*|asset|fund|financial|wealth|insurance|trust|credit|lending|markets|equity|ventures|partners|advis\w*|holdings|trading|mutual|savings|brokerage|exchange)\b/i.test(company || tenant);
+  if (finFirm || postings.some((p) => tracksOf(p.title || "", company || "").some((x) => ["ib", "er", "privcredit", "altcredit", "altinv", "st", "quant"].includes(x)))) {
+    for (const searchText of TRACK_SEARCHES) {
+      for (let offset = 0; offset < 200; offset += 20) {
+        const page = await postJSON(`${api}/jobs`, { appliedFacets: {}, limit: 20, offset, searchText });
+        for (const p of page.jobPostings || []) if (!seenPaths.has(p.externalPath)) { seenPaths.add(p.externalPath); postings.push(p); }
+        if (!page.jobPostings?.length || offset + 20 >= (page.total || 0)) break;
+      }
+    }
+  }
   const out = [];
   for (const p of postings) {
-    if (!kindOf(p.title || "")) continue;
+    if (!kindOf(p.title || "", null, company)) continue;
     const multi = /\d+\s+locations/i.test(p.locationsText || "");
     if (!multi && !parseLocation(p.locationsText).isUS && !/united states|usa|\bus\b/i.test(p.locationsText || "")) continue;
     const d = await detail(`wd:${host}:${p.externalPath}`, async () => {
@@ -960,7 +978,7 @@ function publish() {
     return !b || !okBoards.has(b) || live.has(jobKey(j.url));
   });
   published = dedupe(all);
-  for (const j of published) Object.assign(j, cycleOf(j.seasons, j.term || {}));
+  for (const j of published) { Object.assign(j, cycleOf(j.seasons, j.term || {})); j.tracks = tracksOf(j.title, j.company, j.category); }
   applyEstimates(published.filter((j) => (j.kind || "Internship") === "Internship"), research.findings(), STATES);
   for (const lv of ["Early career", "Mid-level", "Senior", "Leadership"]) applyEstimates(published.filter((j) => j.kind === "Full-time" && (j.level || "Early career") === lv), {}, STATES);
   status.total = published.length;
@@ -1187,6 +1205,7 @@ http.createServer(async (req, res) => {
     }
     const file = path.join(ROOT, "public", url.pathname === "/" ? "index.html" : path.normalize(url.pathname));
     if (!file.startsWith(path.join(ROOT, "public"))) return send(res, 403, "forbidden", "text/plain");
+    if (file === path.join(ROOT, "public", "index.html")) return send(res, 200, await pageHtml(), MIME[".html"]);
     return send(res, 200, await readFile(file), MIME[path.extname(file)] || "application/octet-stream");
   } catch {
     send(res, 404, "not found", "text/plain");
