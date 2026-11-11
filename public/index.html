@@ -504,6 +504,13 @@ p, .say, .hello p, .fits, .paynote, .evidence { text-wrap: pretty; }
 .start .count { position: static; align-self: flex-start; margin-bottom: 18px; }
 .start b { font-size: 21px; }
 @media (max-width: 860px) { .dock { padding: 8px 12px 78px; } .scroll { padding: 8px 16px 20px; } .bhead h2 { white-space: nowrap; font-size: 19px; } .bhead .tabs button { padding: 5px 10px; letter-spacing: .1em; } .outreach span { display: none; } .outreach { padding: 0; width: 44px; justify-content: center; } }
+/* staged attachment */
+.staged { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 8px 6px; }
+.staged[hidden] { display: none; }
+.staged .stg { display: inline-flex; align-items: center; gap: 4px; padding: 4px 4px 4px 12px; border-radius: 999px; background: color-mix(in srgb, var(--ember) 16%, var(--wash)); font-size: 13px; }
+.staged .stg button { border: 0; background: none; width: 20px; height: 20px; border-radius: 50%; color: var(--muted); cursor: pointer; }
+.staged .stg button:hover { background: var(--wash-2); color: var(--text); }
+.staged small { color: var(--muted); font-size: 12px; }
 /* career tracks + resume card */
 .tracks .tgrp { margin-top: 6px; }
 .tracks .tgl { display: block; font-size: 10.5px; letter-spacing: .13em; text-transform: uppercase; color: var(--faint); margin: 8px 0 5px; }
@@ -560,11 +567,13 @@ p, .say, .hello p, .fits, .paynote, .evidence { text-wrap: pretty; }
       <div class="dock-inner">
         <div class="chips" id="chips" role="group" aria-label="Suggestions"></div>
         <div class="edge">
+          <div class="staged" id="staged" hidden></div>
           <form class="composer" id="composer">
             <label class="sr" for="input">Message Scout</label>
             <input type="file" id="resumeFile" accept=".pdf,.docx,.txt,.md,application/pdf" hidden>
             <button type="button" class="cbtn" id="attach" aria-label="Upload your resume to match internships"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m21 11-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l7.9-7.9"/></svg></button>
             <textarea id="input" rows="1" placeholder="Describe the role you're hoping for…"></textarea>
+            <button type="button" class="cbtn" id="aiKey" aria-pressed="false" aria-label="Connect Claude for conversational answers" title="Connect your Claude API key for conversational answers">✦</button>
             <button type="button" class="cbtn" id="voice" aria-label="Speak to Scout"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
             <button type="submit" class="cbtn send" id="send" aria-label="Send"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
           </form>
@@ -682,9 +691,9 @@ function unpackRows(d) {
 
 /* ---------------- state ---------------- */
 let JOBS = [], STATUS = null, loaded = false;
-const blank = () => ({ keywords: [], exclude: [], excludeCategories: [], industries: [], boost: [], categories: [], states: [], remoteOnly: false, kind: "Internship", level: "", season: "", offCycle: false, cycle: [], weeksBand: "", termConfirmed: false, degree: "", needsVisa: false, minHourlyPay: 0, paidOnly: false, payPostedOnly: false, companies: [], postedWithinDays: 0, tracks: [], hideSenior: false });
+const blank = () => ({ keywords: [], exclude: [], excludeCategories: [], industries: [], boost: [], categories: [], states: [], remoteOnly: false, kind: "Internship", level: "", season: "", offCycle: false, cycle: [], weeksBand: "", termConfirmed: false, degree: "", needsVisa: false, minHourlyPay: 0, paidOnly: false, payPostedOnly: false, companies: [], postedWithinDays: 0, tracks: [], hideSenior: false, startYear: 0 });
 /* view-only settings that never go to the server */
-const V = { q: "", sort: "new", strongOnly: false, hideApplied: store.get("is-hide-applied", true) };
+const V = { q: "", sort: "new", kindTouched: false, strongOnly: false, hideApplied: store.get("is-hide-applied", true) };
 let applied = new Set(store.get("is-applied", []));
 let F = blank();
 let answered = new Set();
@@ -769,6 +778,13 @@ function relevance(j, f = F) {
   const ind = industryOf(j);
   for (const i of f.industries || []) if (ind.includes(i)) r += 3;
   if ((f.boost || []).includes("senior") && /Senior|Leadership/.test(j.level || "")) r += 2;
+  // what was asked for beyond hard filters: more of the requested tracks, the right start year, early career
+  if (f.tracks?.length && j.tracks?.length) {
+    r += 0.5 * j.tracks.filter((t) => f.tracks.includes(t)).length;
+    if (typeof tracksOf === "function") r += 3 * (j._tt ||= tracksOf(j.title, "", "")).filter((t) => f.tracks.includes(t)).length;
+  }
+  if (f.startYear && j.seasons?.some((x) => x.includes(String(f.startYear)))) r += 1.5;
+  if (f.hideSenior && j.kind === "Full-time" && j.level === "Early career") r += 1;
   return r;
 }
 function matches(j, f = F, skip) {
@@ -1079,7 +1095,7 @@ function resultsCard(before, after, list) {
   document.querySelectorAll(".results .reacts button").forEach((b) => (b.disabled = true));
   const sec = document.createElement("section"); sec.className = "results glass" + (RM.matches ? "" : " bloom");
   const seen = new Set(), varied = list.filter((j) => !seen.has(j.company) && seen.add(j.company));
-  const top = (PROFILE ? list : [...varied, ...list.filter((j) => !varied.includes(j))]).slice(0, 4), share = before ? Math.max(3, Math.round((after / before) * 100)) : 100;
+  const top = (PROFILE ? list : [...varied, ...list.filter((j) => !varied.includes(j))]).slice(0, 6), share = before ? Math.max(3, Math.round((after / before) * 100)) : 100;
   sec.innerHTML = `
     <div class="rhead"><div class="t"><div class="eyebrow"><span class="pulse"></span>${SNAP ? "Matches" : "Matches · live"}</div><h3>${esc(describe())}</h3></div>
       <div class="morph"><div class="big num" data-count>${fmt(before)}</div><div class="from num">${before !== after ? `narrowed from ${fmt(before)}` : `${plural(today(list), "posted", "posted")} today`}</div></div></div>
@@ -1170,14 +1186,8 @@ function nextQuestion(list) {
 }
 
 /* ---------------- presenting results ---------------- */
-async function present({ echo = "", lead = "", before }) {
-  const list = ordered(results());
-  const after = list.length;
-  $("#title").textContent = describe();
-  renderBoard();
-  if (!after) {
-    // Relax the softest details first until something fits, then say what changed.
-    const steps = [
+function relaxSteps() {
+  return [
       ["the industry (it still ranks matches higher)", (f) => ({ boost: [...new Set([...(f.boost || []), ...(f.industries || []).map((i) => i.split(" ")[0].toLowerCase())])], industries: [] }), (f) => f.industries?.length],
       ["the exact keywords", () => ({ keywords: [] }), (f) => f.keywords.length],
       ["the experience level", () => ({ level: "" }), (f) => f.level],
@@ -1190,7 +1200,30 @@ async function present({ echo = "", lead = "", before }) {
       ["the location", () => ({ states: [], remoteOnly: false }), (f) => f.states.length || f.remoteOnly],
       ["the company", () => ({ companies: [] }), (f) => f.companies.length],
       ["the career track (results are still ranked by it)", () => ({ tracks: [] }), (f) => f.tracks?.length],
-    ];
+  ];
+}
+async function present({ echo = "", lead = "", before, minWanted = 1 }) {
+  let list = ordered(results());
+  let after = list.length;
+  $("#title").textContent = describe();
+  renderBoard();
+  if (after && after < minWanted && !F.companies.length) {
+    // too few to browse: loosen the least important details until there is a real list
+    const kept = after, relaxedFew = [];
+    for (const [label, patch, applies] of relaxSteps()) {
+      if (!applies(F)) continue;
+      Object.assign(F, patch(F)); relaxedFew.push(label);
+      if (results().length >= minWanted) break;
+    }
+    const l2 = ordered(results());
+    if (l2.length > kept) {
+      list = l2; after = l2.length; $("#title").textContent = describe(); renderBoard();
+      lead = [lead, `Only ${plural(kept, "role")} matched every detail, so I also loosened ${relaxedFew.join(", then ")}.`].filter(Boolean).join(" ");
+    }
+  }
+  if (!after) {
+    // Relax the softest details first until something fits, then say what changed.
+    const steps = relaxSteps();
     const relaxed = [];
     for (const [label, patch, applies] of steps) {
       if (!applies(F)) continue;
@@ -1208,7 +1241,7 @@ async function present({ echo = "", lead = "", before }) {
     return scout({ echo, lines: [lead, "Nothing fits all of that right now. That's today's market, not you. Want me to loosen one thing?"], chips: loosen.length ? loosen : [{ label: "Start a new search", run: reset }] });
   }
   const t = today(list);
-  const summary = `${plural(after, F.kind === "Full-time" ? "job" : F.kind ? "internship" : "role")} ${after === 1 ? "fits" : "fit"}${t ? `, and ${t} went up in the last day` : ""}.`;
+  const summary = after > 3 ? overview(list) + (t ? ` ${plural(t, "posting")} went up in the last day.` : "") : `${plural(after, F.kind === "Full-time" ? "job" : F.kind ? "internship" : "role")} ${after === 1 ? "fits" : "fit"}${t ? `, and ${t} went up in the last day` : ""}.`;
   const nq = nextQuestion(list);
   await scout({ echo, lines: [lead, summary], render: () => resultsCard(before ?? JOBS.length, after, list), question: nq.q, chips: nq.chips,
     after: () => { if (firstResults) { firstResults = false; milestone("Your first matches are in"); openBoardOnce(); } } });
@@ -1289,10 +1322,120 @@ const TRACK_ASK = [
   ["pm", /product manag|\bapm\b|product owner|\bpm (role|job|intern)/],
   ["tpm", /technical product|\btpm\b|platform product|technical program/],
   ["prodstrat", /product strategy|strategy (and|&) ops|product ops|chief of staff|bizops|business strategy/],
-  ["finance", /corporate finance|\bfp&a\b|financial analyst|treasury|financial planning|strategic finance/],
+  ["finance", /\bfinance\b|\bfp&a\b|financial analyst|treasury|financial planning|strategic finance/],
 ];
 const TRACK_CATS = ["Data & Analytics", "AI & Data Science", "Product", "Quant & Finance", "Investment Banking", "Asset Mgmt & PE", "Corporate Finance"];
 const trackAsk = (text) => TRACK_ASK.filter(([, re]) => re.test(text.toLowerCase())).map(([id]) => id);
+/* ---------------- understanding what you typed ----------------
+   A message can mix who you are ("I'm a junior studying finance") with what you want ("IB or equity
+   research roles in New York or Charlotte"). Only what you want becomes a search; who you are only
+   helps when nothing else names a field. Most details rank instead of filtering, so a long, specific
+   request still returns a real list instead of one or two jobs. */
+const WANT_RX = /\b(want|wanna|need|looking|look for|find|show|search|interested|apply|hiring|hire|hires|recruit\w*|openings?|opportunit\w*|roles?|jobs?|positions?|internships?|co-?ops?|careers?|programs?)\b/i;
+const ABOUT_RX = /\b(i'?m|i am|i'?ve|i have|my|studying|majoring|major|minor|junior|senior|sophomore|freshman|gpa|currently|background|graduating)\b/i;
+const WANT_START = /\b(?:i (?:really )?(?:want|wanna|need|would like|'d like|am looking|'m looking|am interested|'m interested)|looking for|look for|find me|show me|search for|give me)\b/i;
+function splitIntent(text) {
+  const clauses = text.split(/(?<=[.!?;])\s+|\n+/).map((c) => c.trim()).filter(Boolean);
+  const want = [], about = [];
+  for (const c of clauses) {
+    if (WANT_RX.test(c)) { const m = c.match(WANT_START); if (m && m.index > 12) { about.push(c.slice(0, m.index)); want.push(c.slice(m.index)); } else want.push(c); }
+    else (ABOUT_RX.test(c) ? about : want).push(c);
+  }
+  return want.length ? { want: want.join(". "), about: about.join(". ") } : { want: text, about: "" };
+}
+function payWish(low) {
+  let m = low.match(/(?<![\d.])\$?\s?(\d{2,3})\s?k\b/);
+  if (m && +m[1] >= 30) return Math.round((+m[1] * 1000) / 2080);
+  m = low.match(/\$\s?(\d{2,3}),(\d{3})\b/);
+  if (m) return Math.round(+(m[1] + m[2]) / 2080);
+  m = low.match(/(?<![\d.])\$?\s?(\d{2,3})\s?(?:\/|an?|per)\s?(?:hr|hour)\b|\$\s?(\d{2,3})\s?(?:hourly)\b/);
+  if (m) return +(m[1] || m[2]);
+  return 0;
+}
+const GENERIC_WORDS = new Set("a an the and or of for in on at to with from by about into over under i me my we you your is are am be been was were do does can could would should will want need looking look find show give get any some all more most less few many much very really just also only please thanks hey hello jobs job roles role positions position openings opening internships internship intern full time fulltime part new grad grads graduate graduates entry level early career junior senior mid starting start begin class that this these those there here what which who when where why how hiring hire apply applying available current open companies company firms firm employers employer analyst associate summer fall spring winter month week today year years paying pay salary remote hybrid onsite anywhere around near within able like prefer preferably ideally maybe other another actually include including too instead rather same again anything something everything nothing whatever else still keep drop remove add switch change only just".split(" "));
+const NOT_EMPLOYER = new Set([...GENERIC_WORDS, ...Object.values(STATE_NAMES).map((x) => x.toLowerCase()), ...Object.keys(CITY_STATE), "investment", "banking", "research", "equity", "credit", "capital", "trading", "markets", "finance", "financial", "product", "data", "science", "analytics", "engineering", "software", "technology", "business", "partners", "private", "alternative", "management", "global", "american", "national", "united", "general", "international", "services", "solutions", "systems", "associates", "ventures", "labs", "internships", "internship", "careers", "career", "jobs", "hiring", "recruiting", "talent", "opportunities", "staffing", "recruitment"]);
+let COMPANY_INDEX = null;
+function companyIndex() {
+  if (COMPANY_INDEX && COMPANY_INDEX.n === JOBS.length) return COMPANY_INDEX;
+  const counts = new Map();
+  for (const j of JOBS) counts.set(j.company, (counts.get(j.company) || 0) + 1);
+  const norm = (c) => c.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9 ]/g, " ").replace(/\b(inc|llc|ltd|lp|corp|corporation|co|company|the|holdings)\b/g, " ").replace(/\s+/g, " ").trim();
+  const full = new Map(), byFirst = new Map();
+  for (const [c, n] of counts) {
+    const k = norm(c);
+    if (k.length >= 5 && !NOT_EMPLOYER.has(k)) full.set(k, c);
+    const w = k.split(" ")[0];
+    // a first word ("goldman", "blackstone") names the employer only for financial firms and big employers
+    if (w.length >= 5 && !NOT_EMPLOYER.has(w) && (n >= 40 || (typeof finCo === "function" && finCo(c)))) { const cur = byFirst.get(w); if (!cur || counts.get(cur) < n) byFirst.set(w, c); }
+  }
+  return (COMPANY_INDEX = { n: JOBS.length, full, byFirst });
+}
+function companiesIn(low) {
+  const { full, byFirst } = companyIndex(), out = new Set();
+  const text = " " + low.replace(/&/g, " and ").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ") + " ";
+  for (const [k, c] of full) if (text.includes(" " + k + " ")) out.add(c);
+  for (const w of text.split(" ")) if (byFirst.has(w)) out.add(byFirst.get(w));
+  return [...out].slice(0, 4);
+}
+const FIRMS_Q = /\b(which|what|who)\b[^?.]*\b(compan(?:y|ies)|firms?|employers?|banks?|funds?|shops?|teams?|places)\b|\bwho(?:'s| is| are)\s+hiring|\blist (?:of )?(?:the )?(?:top )?(?:compan|firm|employer)/i;
+function understand(text, current) {
+  const fresh = /start over|new search|forget (that|everything|it)|reset/i.test(text);
+  const base = fresh ? blank() : { ...blank(), ...current };
+  const { want, about } = splitIntent(text);
+  const low = " " + want.toLowerCase().replace(/[’]/g, "'") + " ";
+  const f = { ...localFilters(want, base) };
+  // field: what you asked for; only if that names none, what you said about yourself
+  let asked = trackAsk(want);
+  if (!asked.length) asked = trackAsk(about);
+  if (asked.includes("quant") && !/sales|markets|desk/.test(low)) asked = asked.filter((t) => t !== "st");
+  // "asset-based finance" is credit, not corporate finance; "technical product manager" is not every product manager
+  if (asked.some((t) => ["ib", "er", "privcredit", "altcredit", "altinv", "st", "quant"].includes(t)) && !/corporate finance|fp&a|financial analyst|treasury|financial planning|strategic finance/.test(low)) asked = asked.filter((t) => t !== "finance");
+  if (asked.includes("tpm") && !/product manag/.test(low.replace(/technical product manag\w*/g, " "))) asked = asked.filter((t) => t !== "pm");
+  f.tracks = asked.length ? asked : fresh ? [] : base.tracks || [];
+  if (asked.some((t) => ["finance", "ib", "er", "privcredit", "altcredit", "altinv", "st", "quant"].includes(t))) f.industries = (f.industries || []).filter((i) => i !== "Banking & finance" && i !== "Insurance");
+  if (asked.length) f.categories = (f.categories || []).filter((c) => !TRACK_CATS.includes(c));
+  if (!/analytics|statistic|actuar|\bdata\b|\bbi\b/.test(low) && !(base.categories || []).includes("Data & Analytics")) f.categories = (f.categories || []).filter((c) => c !== "Data & Analytics");
+  // seniority: entry level is a ceiling (no senior or leadership roles), not an exact label
+  if (f.level === "Early career" && base.level !== "Early career") { f.level = base.level || ""; f.hideSenior = true; }
+  else f.hideSenior = fresh ? false : base.hideSenior;
+  if (/\b(senior|sr|lead|principal|director|vp)\b/.test(low) && !/entry|new ?grad|junior/.test(low)) f.hideSenior = false;
+  // internship or full-time: only when said; "roles" and "jobs" mean either, so both are shown
+  const full = /\bfull[- ]?time|new ?grads?|new graduates?|permanent|early[- ]career (?:role|job|program)/.test(low), intern = /\bintern(ship)?s?\b|co-?op|summer (analyst|associate)|off-?cycle|part[- ]time/.test(low);
+  const alsoIntern = intern && !full && /\b(too|also|as well|include|including|plus|both)\b/.test(low) && base.kind !== "Internship";
+  f.kind = alsoIntern ? "" : full && !intern ? "Full-time" : intern && !full ? "Internship" : full && intern || /\b(both|either)\b/.test(low) ? "" : base.kind === "Internship" && !V.kindTouched ? "" : base.kind;
+  if (intern) V.kindTouched = true;
+  if (f.kind === "Full-time") { f.offCycle = false; f.cycle = []; }
+  // pay, start year, how recent
+  const pw = payWish(low); f.minHourlyPay = pw || (fresh ? 0 : base.minHourlyPay);
+  const sy = low.match(/(?:start(?:ing)?|begin(?:ning)?|class of|graduat\w*|join(?:ing)?|in|for)\s+(?:in\s+)?(?:(?:early|late|mid|spring|summer|fall|winter|january|february|march|april|may|june|july|august|september|october|november|december)\w*\s+)?(20[2-3]\d)\b/);
+  f.startYear = sy ? +sy[1] : fresh ? 0 : base.startYear || 0;
+  if (/\bthis month|past month|last 30 days|last month\b/.test(low)) f.postedWithinDays = 30;
+  else if (/\b(recently posted|just posted|newest|latest|fresh)\b/.test(low) && !f.postedWithinDays) f.postedWithinDays = 14;
+  // employers named in the request (also by first name: "goldman", "blackstone")
+  const named = companiesIn(want);
+  let cos = [...new Set([...(f.companies || []), ...named])].filter((c) => !NOT_EMPLOYER.has(c.toLowerCase()));
+  cos = cos.filter((c) => !cos.some((o) => o !== c && o.toLowerCase().startsWith(c.toLowerCase() + " ")));
+  f.companies = cos.slice(0, 4);
+  // other words of the request rank results ("energy", "restructuring") without excluding anything
+  let rest = low;
+  for (const [, re] of TRACK_ASK) rest = rest.replace(new RegExp(re.source, "gi"), " ");
+  rest = rest.replace(/\d+/g, " ");
+  for (const name of Object.values(STATE_NAMES)) rest = rest.replace(new RegExp(`\\b${name.toLowerCase()}\\b`, "g"), " ");
+  for (const city of Object.keys(CITY_STATE)) rest = rest.replace(new RegExp(`\\b${city.replace(".", "\\.")}\\b`, "g"), " ");
+  const extra = [...new Set((rest.match(/[a-z][a-z&+'-]{3,}/g) || []).filter((w) => !GENERIC_WORDS.has(w)))].slice(0, 4);
+  f.boost = [...new Set([...(f.boost || []), ...extra])];
+  if (!asked.length && !named.length && !(f.categories || []).length && !(f.industries || []).length && !(base.tracks || []).length && !(base.keywords || []).length && extra.length) f.keywords = extra;
+  return { f, intent: FIRMS_Q.test(want) ? "firms" : "search", asked, extra };
+}
+// A short readable answer: how many, what mix, who is hiring, where.
+function overview(list) {
+  if (!list.length) return "";
+  const kinds = new Map(tally(list, "kind"));
+  const emp = tally(list, "company").slice(0, 5).map(([c, n]) => `${c} (${fmt(n)})`);
+  const places = tally(list, "states").slice(0, 3).map(([st, n]) => `${STATE_NAMES[st] || st} (${fmt(n)})`);
+  const mix = kinds.size > 1 ? ` ${fmt(kinds.get("Full-time") || 0)} full-time and ${plural(kinds.get("Internship") || 0, "internship")}.` : "";
+  return `${plural(list.length, "role")} fit.${mix} Most hiring: ${emp.join(", ")}.${places.length ? ` Mostly in ${places.join(", ")}.` : ""}${PROFILE ? " Ranked by your resume." : ""}`;
+}
 function localFilters(message, current) {
   const full = message.toLowerCase().replace(/[’']/g, "'");
   const base = /start over|new search|instead|forget|reset/.test(full) ? blank() : { ...blank(), ...current };
@@ -1328,7 +1471,7 @@ function localFilters(message, current) {
   const degree = /ph\.?d|doctoral/.test(m) ? "PhD" : /\bmba\b/.test(m) ? "MBA" : /master'?s|grad school/.test(m) ? "Master's" : /undergrad|bachelor|freshman|sophomore/.test(m) ? "Bachelor's" : "";
   const company = [...new Set(JOBS.map((j) => j.company))].filter((c) => c.length > 3 && new RegExp(`\\b${c.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(m));
   const anywhere = /anywhere|any (state|location|city)/.test(m);
-  const wantsFull = (/full[- ]?time|new ?grad|entry[- ]level|after (i )?graduat|first job|senior|experienced|director|mid[- ]level|\broles?\b|\bpositions?\b|\bjobs?\b|\bmanager\b|\bcareers?\b/.test(m) || years >= 1) && !/\bintern|co-?op/.test(m);
+  const wantsFull = (/full[- ]?time|new ?grad|entry[- ]level|after (i )?graduat|first job|senior|experienced|director|mid[- ]level|\bmanager\b/.test(m) || years >= 1) && !/\bintern|co-?op/.test(m);
   return {
     reply: "", keywords: base.keywords,
     exclude: [...new Set([...(base.exclude || []), ...neg.exclude])],
@@ -1352,34 +1495,87 @@ function localFilters(message, current) {
   };
 }
 
+/* Optional: connect your own Claude API key (kept only in this browser) and Scout answers like a chatbot. The model
+   sees your message, your current filters, a short profile summary (tracks, skills; never the resume text) and the
+   titles of the top few matches. It returns an answer and the filter changes to make; the board does the searching. */
+let CLAUDE_KEY = store.get("is-claude-key", "");
+const CHAT_HISTORY = [];
+const CLAUDE_KINDS = ["Internship", "Full-time", ""];
+function paintKey() { const b = $("#aiKey"); b.setAttribute("aria-pressed", !!CLAUDE_KEY); b.title = CLAUDE_KEY ? "Claude is connected (click to change or disconnect)" : "Connect your Claude API key for conversational answers"; }
+$("#aiKey").onclick = () => {
+  const v = prompt(CLAUDE_KEY ? "Your Claude API key is saved in this browser. Paste a new one, or clear this box to disconnect." : "Paste your Anthropic API key to let Scout answer like a chatbot.\n\nIt stays in this browser and is sent only to Anthropic. Anthropic then sees your message, your filters, a short summary of your resume (tracks and skills, not the text) and a few matching job titles.", "");
+  if (v === null) return;
+  CLAUDE_KEY = v.trim(); store.set("is-claude-key", CLAUDE_KEY); paintKey();
+  toast(CLAUDE_KEY ? "Claude connected. Ask me anything, in your own words." : "Claude disconnected.");
+};
+paintKey();
+async function claudeChat(text, local) {
+  const top = ordered(results()).slice(0, 12).map((j) => `${j.title} @ ${j.company} (${placeOf(j)}${j.pay ? ", " + payLabel(j.pay, true, j) : ""})`);
+  const ctx = { filters: F, matchesNow: results().length, topMatches: top, tracksAvailable: TRACK_LIST.map((t) => `${t.id}=${t.label}`),
+    profile: PROFILE ? { tracks: PROFILE.tracks, degree: PROFILE.degree, classOf: PROFILE.gradYear, skills: (PROFILE.skills || []).slice(0, 25), bookedSeasons: PROFILE.bookedSeasons } : null };
+  const system = "You are Scout, the job-search assistant inside InternScout. The user searches open US internships and full-time jobs. Reply with ONLY a JSON object: {\"reply\": string, \"filters\": object}. reply: 2 to 5 plain sentences, no markdown, answer the question directly, and mention only listings from topMatches (never invent jobs or employers). filters: only the changes the message asks for; allowed keys: tracks (array of ids from tracksAvailable), states (US state abbreviations), kind (\"Internship\", \"Full-time\" or \"\" for both), hideSenior (boolean), minHourlyPay (number, annual salary divided by 2080), remoteOnly (boolean), postedWithinDays (number), companies (array), startYear (number), boost (array of words that should rank higher). Use an empty object if the message is only a question.";
+  const res = await fetch("https://api.anthropic.com/v1/messages", { method: "POST",
+    headers: { "content-type": "application/json", "x-api-key": CLAUDE_KEY, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+    body: JSON.stringify({ model: "claude-haiku-5-5", max_tokens: 700, system, messages: [...CHAT_HISTORY.slice(-6), { role: "user", content: JSON.stringify({ message: text, context: ctx }) }] }) });
+  if (!res.ok) throw new Error("claude " + res.status);
+  const body = await res.json();
+  const raw = (body.content || []).map((c) => c.text || "").join("");
+  const out = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1));
+  CHAT_HISTORY.push({ role: "user", content: text }, { role: "assistant", content: String(out.reply || "").slice(0, 600) });
+  const f = { ...local }, c = out.filters || {};
+  const ids = new Set(TRACK_LIST.map((t) => t.id));
+  if (Array.isArray(c.tracks)) f.tracks = c.tracks.filter((t) => ids.has(t));
+  if (Array.isArray(c.states)) f.states = c.states.map((x) => String(x).toUpperCase()).filter((x) => STATE_NAMES[x]);
+  if (CLAUDE_KINDS.includes(c.kind)) f.kind = c.kind;
+  if (typeof c.hideSenior === "boolean") f.hideSenior = c.hideSenior;
+  if (typeof c.remoteOnly === "boolean") f.remoteOnly = c.remoteOnly;
+  if (Number(c.minHourlyPay) > 0) f.minHourlyPay = Math.min(250, Math.round(Number(c.minHourlyPay)));
+  if (Number(c.postedWithinDays) > 0) f.postedWithinDays = Math.min(365, Math.round(Number(c.postedWithinDays)));
+  if (Number(c.startYear) > 2000) f.startYear = Number(c.startYear);
+  if (Array.isArray(c.companies)) f.companies = c.companies.map(String).slice(0, 4);
+  if (Array.isArray(c.boost)) f.boost = [...new Set([...(f.boost || []), ...c.boost.map((x) => String(x).toLowerCase()).slice(0, 6)])];
+  f.reply = String(out.reply || "").slice(0, 900);
+  return f;
+}
 /* free text goes through the server (Claude when configured, keyword parser otherwise) */
-async function ask(text) {
+async function ask(text, opts = {}) {
   text = text.trim(); if (!text || busy) return;
-  removeHello(); started = true; sfx("tap"); addUser(text); lastText = text;
+  removeHello(); started = true; sfx("tap"); if (!opts.noEcho) addUser(text); lastText = text;
   $("#input").value = ""; autosize();
   const before = results().length;
-  let r;
+  let plan = null, r = null;
   try {
     r = await withThinking(["Listening", "Reading the listings", "Sorting what fits"], async () => {
-      if (SNAP || !STATUS?.ai) return localFilters(text, F);
+      if (CLAUDE_KEY) { plan = understand(text, F); try { return await claudeChat(text, plan.f); } catch (e) { hint("Claude didn't answer (" + (e.message || "error") + "), so I searched without it."); return plan.f; } }
+      if (SNAP || !STATUS?.ai) { plan = understand(text, F); return plan.f; }
       const res = await fetch("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: text, current: F }) });
-      if (!res.ok) throw new Error(res.status); return res.json();
-    }, 1200);
+      if (!res.ok) throw new Error(res.status);
+      const j = await res.json(); plan = understand(text, F); return { ...plan.f, ...j, tracks: plan.f.tracks, hideSenior: plan.f.hideSenior, startYear: plan.f.startYear, minHourlyPay: j.minHourlyPay || plan.f.minHourlyPay, reply: j.reply };
+    }, 500);
   } catch {
     return scout({ lines: ["I couldn't reach the job feeds just now. Your search is safe; this is a connection hiccup on my side."], chips: [{ label: "Try again", run: () => ask(lastText) }] });
   }
   const next = { ...blank(), ...r };
-  const fresh = /start over|new search|forget|reset/i.test(text), asked = trackAsk(text);
-  next.tracks = asked.length ? asked : fresh ? [] : r.tracks?.length ? r.tracks : F.tracks;
-  next.hideSenior = fresh ? false : F.hideSenior;
-  if (asked.length) next.categories = (next.categories || []).filter((c) => !TRACK_CATS.includes(c));
-  next.states = (next.states || []).map((s) => s.toUpperCase());
+  next.states = (next.states || []).map((x) => x.toUpperCase());
   const known = new Set(JOBS.map((j) => j.company.toLowerCase()));
   next.companies = (next.companies || []).filter((c) => known.has(c.toLowerCase()));
+  const claudeReply = r.reply;
   delete next.reply;
-  if (next.categories.length) answered.add("what");
+  if (next.categories.length || next.tracks.length) answered.add("what");
   F = next;
-  await present({ echo: text, lead: r.reply || "", before });
+  if (plan?.intent === "firms") return answerFirms(text, opts.lead || "", before);
+  await present({ echo: opts.noEcho ? "" : text, lead: [opts.lead, r.reply].filter(Boolean).join(" "), before, minWanted: 10 });
+}
+// "which firms are hiring…": name the employers, and let each one be a tap away.
+async function answerFirms(text, lead, before) {
+  const list = ordered(results());
+  $("#title").textContent = describe(); renderBoard();
+  if (!list.length) return present({ echo: text, lead, before, minWanted: 10 });
+  const emp = tally(list, "company").slice(0, 12);
+  await scout({ lines: [lead, `${plural(list.length, "open role")} across ${plural(new Set(list.map((j) => j.company)).size, "employer")}. The ones hiring most for this: ${emp.slice(0, 8).map(([c, n]) => `${c} (${fmt(n)})`).join(", ")}. Tap one to see only their roles.`].filter(Boolean),
+    render: () => resultsCard(before, list.length, list),
+    chips: emp.slice(0, 8).map(([c, n]) => ({ label: c, count: n, run: () => refine(c, { companies: [c] }, `${c}: every open role that fits, best first.`) })),
+    after: () => { if (firstResults) { firstResults = false; openBoardOnce(); } } });
 }
 
 /* reactions on a results card */
@@ -1521,7 +1717,7 @@ function renderBoard() {
   const qs = V.q.toLowerCase().split(/\s+/).filter(Boolean);
   let list = (boardTab === "saved" ? JOBS.filter((j) => saved.has(j.id)) : boardTab === "applied" ? JOBS.filter((j) => applied.has(j.id)) : results()).filter((j) => !qs.length || qs.every((w) => (j._q ||= (j.title + " " + j.company + " " + j.location).toLowerCase()).includes(w)));
   if (V.sort === "pay") list = [...list].sort((a, b) => (payMid(b) ?? -1) - (payMid(a) ?? -1));
-  if (V.sort === "match" && PROFILE) list = ordered(list);
+  if ((V.sort === "match" && PROFILE) || (V.sort === "new" && !PROFILE && (F.boost?.length || F.industries?.length || F.tracks?.length || F.startYear))) list = ordered(list);
   else if (V.strongOnly && PROFILE) list = list.filter((j) => (j._score ?? 0) >= 70);
   if (V.sort === "company") list = [...list].sort((a, b) => a.company.localeCompare(b.company) || a.title.localeCompare(b.title));
   if (V.sort === "old") list = [...list].reverse();
@@ -1585,7 +1781,8 @@ function renderBoard() {
     if (F.termConfirmed) pills.push(["Term confirmed in description", "termConfirmed", ""]);
     if (F.degree) pills.push([F.degree, "degree", ""]);
     if (F.needsVisa) pills.push(["Open to visa holders", "needsVisa", ""]);
-    if (F.minHourlyPay) pills.push([`$${F.minHourlyPay}+/hr`, "minHourlyPay", ""]);
+    if (F.minHourlyPay) pills.push([F.minHourlyPay >= 45 ? `$${Math.round(F.minHourlyPay * 2.08)}k+/yr` : `$${F.minHourlyPay}+/hr`, "minHourlyPay", ""]);
+    if (F.startYear) pills.push([`Start ${F.startYear}`, "startYear", ""]);
     if (F.paidOnly) pills.push(["Paid only", "paidOnly", ""]);
     if (F.payPostedOnly) pills.push(["Published pay only", "payPostedOnly", ""]);
     if (F.postedWithinDays) pills.push([F.postedWithinDays === 1 ? "Today" : `Last ${F.postedWithinDays} days`, "postedWithinDays", ""]);
@@ -1683,7 +1880,7 @@ function openBoard(open) {
 let bqT;
 $("#bq").addEventListener("input", (e) => { clearTimeout(bqT); bqT = setTimeout(() => { V.q = e.target.value.trim(); boardShown = 40; renderBoard(); }, 90); });
 $("#bsort").onchange = (e) => { V.sort = e.target.value; renderBoard(); };
-$("#kindsw").addEventListener("click", (e) => { const b = e.target.closest("[data-kind]"); if (!b) return; F.kind = b.dataset.kind; if (F.kind === "Full-time") { F.offCycle = false; F.cycle = []; } boardChanged(); });
+$("#kindsw").addEventListener("click", (e) => { const b = e.target.closest("[data-kind]"); if (!b) return; V.kindTouched = true; F.kind = b.dataset.kind; if (F.kind === "Full-time") { F.offCycle = false; F.cycle = []; } boardChanged(); });
 function paintKind() { document.querySelectorAll("#kindsw [data-kind]").forEach((b) => b.setAttribute("aria-checked", b.dataset.kind === (F.kind ?? ""))); }
 $("#hideApplied").checked = V.hideApplied;
 $("#hideApplied").onchange = (e) => { V.hideApplied = e.target.checked; store.set("is-hide-applied", V.hideApplied); renderBoard(); };
@@ -1773,7 +1970,7 @@ function paintGreeting() {
 }
 function removeHello() { $("#hello")?.remove(); }
 function reset() {
-  F = blank(); answered = new Set(); started = false; firstResults = true; busy = false; $("#send").disabled = false;
+  F = blank(); V.kindTouched = false; answered = new Set(); started = false; firstResults = true; busy = false; $("#send").disabled = false;
   thread.innerHTML = ""; $("#title").textContent = "A new search"; greet(); renderBoard(); scroller.scrollTop = 0;
 }
 
@@ -2005,7 +2202,7 @@ function rescore() {
   for (const j of JOBS) { const r = scoreJob(j, PROFILE); j._score = r.score; j._rank = r.rank; j._why = r.why; }
 }
 function ordered(list) {
-  const key = PROFILE ? (j) => (j._rank ?? 0) + relevance(j) * 4 : (F.boost?.length || F.industries?.length) ? (j) => relevance(j) : null;
+  const key = PROFILE ? (j) => (j._rank ?? 0) + relevance(j) * 4 : (F.boost?.length || F.industries?.length || F.tracks?.length || F.startYear) ? (j) => relevance(j) : null;
   if (!key) return list;
   const dec = list.map((j) => [key(j), j.postedAt || "", j]);
   dec.sort((a, b) => b[0] - a[0] || (a[1] < b[1] ? 1 : a[1] > b[1] ? -1 : 0));
@@ -2039,12 +2236,12 @@ async function readResumeFile(file) {
   return file.text();
 }
 
-async function handleResume(file) {
+async function handleResume(file, { text: wish = "", quiet = false, label = "" } = {}) {
   if (!file || busy) return;
   if (file.size > 8 * 1024 * 1024) return hint("That file is over 8 MB. A PDF export of your resume is usually under 1 MB.");
   if (!/\.(pdf|docx|txt|md)$/i.test(file.name)) return hint("I can read PDF, Word (.docx) or plain text resumes.");
   removeHello(); started = true; sfx("tap");
-  addUser(`📄 ${file.name}`);
+  if (!quiet) addUser(`📄 ${label || file.name}${wish ? ` · ${wish}` : ""}`);
   let text = "";
   try {
     text = await withThinking(["Reading your resume", "Finding your tracks", "Matching you to every opening"], async () => (await readResumeFile(file)).slice(0, 60000), 400);
@@ -2060,9 +2257,9 @@ async function handleResume(file) {
     } catch {}
   }
   if (!P.skills.length && !P.categories.length && !P.tracks?.length) return scout({ lines: ["I read your resume but couldn't pick out specific skills. Try telling me what you're good at, like “Python, React and SQL”, and I'll match from there."] });
-  await adoptResume(file.name, P, { preset: false });
+  await adoptResume(file.name, P, { preset: false, text: wish, quiet });
 }
-async function adoptResume(name, P, { preset = false } = {}) {
+async function adoptResume(name, P, { preset = false, text: wish = "", quiet = false } = {}) {
   const entry = { id: "r" + Date.now().toString(36), file: name, profile: { ...P, at: new Date().toISOString() }, preset };
   RESUMES = [...RESUMES.filter((r) => r.file !== name), entry].slice(-4);
   ACTIVE = entry.id; saveResumes(); PROFILE = currentProfile();
@@ -2073,9 +2270,40 @@ async function adoptResume(name, P, { preset = false } = {}) {
   const labels = (PROFILE.tracks || []).slice(0, 4).map((t) => TRACK_NAME[t]).filter(Boolean);
   const who = preset ? `the ${name} starter profile` : "your resume";
   const lead = P.summary || `I read ${who}${P.gradYear ? `, class of ${P.gradYear}` : ""}. ${labels.length ? `It points to ${labels.length > 1 ? labels.slice(0, -1).join(", ") + " and " + labels.at(-1) : labels[0]}, so I set the board to those tracks` : "I ranked every role by how well it fits"}: ${plural(n, "role")}, ${plural(strong, "strong match", "strong matches")}. Add or drop tracks on the board, or just tell me where and when.`;
+  if (quiet) return;
+  if (wish) {
+    // a request came with the file: read both together, so the resume's tracks and level apply and the request narrows them
+    const short = `I read ${who}${P.gradYear ? `, class of ${P.gradYear}` : ""}${labels.length ? `. It points to ${labels.join(", ")}` : ""}. Putting that together with what you asked:`;
+    return ask(wish, { lead: short, noEcho: true });
+  }
   await present({ lead, before });
   milestone("Resume matched. Best fits first.");
 }
+/* A file and a request can go in one message: the paperclip stages the file(s) in the composer until you send. */
+let STAGED = [], fileNow = true;
+function paintStaged() {
+  const box = $("#staged"); box.hidden = !STAGED.length;
+  box.innerHTML = STAGED.map((f, i) => `<span class="stg">📄 ${esc(f.name)}<button type="button" data-unstage="${i}" aria-label="Remove ${esc(f.name)}">×</button></span>`).join("") + (STAGED.length ? `<small>Add a request, or send to match just the file${STAGED.length > 1 ? "s" : ""}.</small>` : "");
+  $("#input").placeholder = STAGED.length ? "What do you want? e.g. “IB or equity research in New York, starting 2028”" : mobile() ? "Ask Scout…" : "Describe the role you're hoping for…";
+}
+function stageFiles(files) {
+  for (const f of files) {
+    if (f.size > 8 * 1024 * 1024) { hint("That file is over 8 MB."); continue; }
+    if (!/\.(pdf|docx|txt|md)$/i.test(f.name)) { hint("I can read PDF, Word (.docx) or plain text resumes."); continue; }
+    STAGED = [...STAGED.filter((x) => x.name !== f.name), f];
+  }
+  STAGED = STAGED.slice(-3); paintStaged(); $("#input").focus();
+}
+async function send() {
+  const text = $("#input").value.trim();
+  if (!STAGED.length) return ask(text);
+  const files = STAGED; STAGED = []; paintStaged(); $("#input").value = ""; autosize();
+  if (busy) return;
+  const names = files.map((f) => f.name).join(" + ");
+  for (const f of files.slice(0, -1)) await handleResume(f, { quiet: true });
+  return handleResume(files.at(-1), { text, label: names });
+}
+$("#staged").addEventListener("click", (e) => { const b = e.target.closest("[data-unstage]"); if (!b) return; STAGED.splice(Number(b.dataset.unstage), 1); paintStaged(); });
 function useStarter(i) {
   if (busy) return;
   const st = STARTERS[i]; removeHello(); started = true; sfx("tap"); addUser(`Use the ${st.name} starter profile`);
@@ -2111,23 +2339,24 @@ function applyProfile() {
   paintKind();
   renderBoard();
 }
-$("#resumeFile").addEventListener("change", (e) => { const f = e.target.files[0]; e.target.value = ""; handleResume(f); });
+$("#resumeFile").addEventListener("change", (e) => { const fl = [...e.target.files]; e.target.value = ""; if (!fl.length) return; if (fileNow) handleResume(fl[0]); else stageFiles(fl); fileNow = true; });
 $("#resumeBtn").onclick = (e) => {
   if (e.shiftKey && PROFILE) { deleteResume(ACTIVE === "all" ? RESUMES.at(-1).id : ACTIVE); toast("Resume removed from this browser."); return; }
   $("#resumeFile").click();
 };
-$("#attach").onclick = () => $("#resumeFile").click();
+$("#attach").onclick = () => { fileNow = false; $("#resumeFile").click(); };
+$("#resumeFile").multiple = true;
 document.addEventListener("dragover", (e) => { if ([...e.dataTransfer.items].some((i) => i.kind === "file")) { e.preventDefault(); document.body.classList.add("dropping"); } });
 document.addEventListener("dragleave", (e) => { if (!e.relatedTarget) document.body.classList.remove("dropping"); });
-document.addEventListener("drop", (e) => { if (!e.dataTransfer.files.length) return; e.preventDefault(); document.body.classList.remove("dropping"); handleResume(e.dataTransfer.files[0]); });
+document.addEventListener("drop", (e) => { if (!e.dataTransfer.files.length) return; e.preventDefault(); document.body.classList.remove("dropping"); stageFiles([...e.dataTransfer.files]); });
 
 /* ---------------- composer ---------------- */
 const input = $("#input");
 function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 160) + "px"; input.style.overflowY = input.scrollHeight > 160 ? "auto" : "hidden"; }
 if (mobile()) input.placeholder = "Ask Scout…";
 input.addEventListener("input", autosize);
-input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(input.value); } });
-$("#composer").onsubmit = (e) => { e.preventDefault(); ask(input.value); };
+input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
+$("#composer").onsubmit = (e) => { e.preventDefault(); send(); };
 $("#voice").onclick = () => hint("Voice search is coming. For now, type it the way you'd say it. I'll understand.");
 addEventListener("keydown", (e) => { if (e.key === "/" && document.activeElement !== input) { e.preventDefault(); input.focus(); } });
 
@@ -2179,6 +2408,7 @@ setInterval(liveLabel, 30000);
 
 /* ---------------- boot ---------------- */
 if (!mobile() && (store.get("is-board", innerWidth > 1240) === false || (innerWidth <= 1240 && store.get("is-board", null) === null))) openBoard(false);
+if (location.hash === "#debug") window.__scout = { plan: (t) => understand(t, F), filters: () => JSON.parse(JSON.stringify(F)), count: (f) => results({ ...blank(), ...f }).length };
 greet(); renderBoard(); renderRail();
 load().then(() => { if (PROFILE) { const sf = store.get("is-f", null); if (sf) F = { ...blank(), ...sf }; else adoptProfile(); applyProfile(); } });
 })();

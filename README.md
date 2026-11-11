@@ -92,6 +92,16 @@ What a resume does:
 
 The page also shows how many roles are new since you last looked, and the same posting in several offices is one row ("+3 more locations").
 
+## Chat
+
+Type the way you'd talk. One message can say who you are and what you want ("I'm a junior studying finance and data science. I want full-time IB or equity research roles in New York or Charlotte starting 2028, over 100k"):
+- **Who you are vs. what you want.** Only the request becomes a search; background only helps when the request names no field.
+- **Hard filters and soft ranking.** Field, place, internship vs full-time and employers filter. Level, start year, pay and any other words (energy, restructuring) rank. "Entry level" hides senior roles instead of requiring an exact label, and "roles" or "jobs" show internships and full-time together.
+- **It never leaves you with one result.** If only a few roles match every detail, the least important details loosen one at a time until there is a real list, and Scout says what it loosened.
+- **It answers.** A reply says how many roles fit, the mix, who is hiring most and where. "Which quant firms are hiring new grads?" lists the firms, and each is one tap to their roles.
+- **Prompt and file together.** The paperclip (or drag and drop) puts the resume in the composer; it is read together with your request when you send, so the resume's tracks and level apply and the request narrows them. Several files can go at once.
+- **Optional: a real chatbot.** The ✦ button takes your own Anthropic API key (kept only in this browser). Scout then answers in free-form and picks the filters; Anthropic sees your message, your filters, a short summary of your resume (tracks and skills, not the text) and a few matching job titles. Without a key everything runs in the browser.
+
 ## Shareable snapshot
 
 With the server running: `node scripts/build-snapshot.mjs` writes `dist/internscout.html`, a single page with the current listings built in. Listings are stored packed (`lib/pack.js`: repeated employers, hosts, locations and pay notes live in tables, each listing is a short array), about a third of the size of plain JSON, so a snapshot of 65,000+ listings is roughly 6 MB and opens quickly.

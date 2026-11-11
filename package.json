@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "node --test test/tracks.test.mjs test/pack.test.mjs",
+    "test": "node --test test/tracks.test.mjs test/pack.test.mjs test/planner.test.mjs",
     "start": "node server.js"
   },
   "keywords": [],
