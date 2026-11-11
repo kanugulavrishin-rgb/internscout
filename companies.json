@@ -56193,6 +56193,22 @@
   {
    "slug": "midjourney",
    "company": "Midjourney"
+  },
+  {
+   "slug": "old-mission-capital",
+   "company": "Old Mission Capital"
+  },
+  {
+   "slug": "quadrature",
+   "company": "Quadrature Capital"
+  },
+  {
+   "slug": "bain-capital",
+   "company": "Bain Capital"
+  },
+  {
+   "slug": "marqeta-inc",
+   "company": "Marqeta"
   }
  ],
  "smartrecruiters": [
@@ -57410,6 +57426,22 @@
   {
    "slug": "tradition",
    "company": "Tradition"
+  },
+  {
+   "slug": "towerresearchcapitalllc",
+   "company": "Tower Research Capital"
+  },
+  {
+   "slug": "schonfeld",
+   "company": "Schonfeld"
+  },
+  {
+   "slug": "stepstonegroup",
+   "company": "StepStone Group"
+  },
+  {
+   "slug": "palantir",
+   "company": "Palantir"
   }
  ],
  "workable": [
@@ -192216,6 +192248,13 @@
   {
    "guid": "03950a95-b278-4adf-9e56-296ee2c0058a",
    "company": "10,000 Degrees"
+  }
+ ],
+ "eightfoldapply": [
+  {
+   "host": "mlp.eightfold.ai",
+   "domain": "mlp.com",
+   "company": "Millennium Management"
   }
  ]
 }

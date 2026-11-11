@@ -513,6 +513,24 @@ async function fromEightfold({ host, domain, company }) {
   return out;
 }
 
+// Some Eightfold tenants (Millennium) have the older public apply API open instead of the pcsx search.
+async function fromEightfoldApply({ host, domain, company }) {
+  const out = [], seen = new Set();
+  for (let start = 0, step = 100; start < 1500; start += step) {
+    const data = await getJSON(`https://${host}/api/apply/v2/jobs?domain=${encodeURIComponent(domain)}&num=100&start=${start}`);
+    const list = data.positions || [];
+    step = list.length || step; // the server caps a page at 10, whatever num says
+    for (const p of list) {
+      if (seen.has(p.id)) continue;
+      seen.add(p.id);
+      const n = normalize({ source: "eightfold", company: company || domain.split(".")[0], title: p.name, location: (p.locations?.length ? p.locations : [p.location]).filter(Boolean).join(" • "), url: p.canonicalPositionUrl || `https://${host}/careers/job/${p.id}`, postedAt: p.t_create ? p.t_create * 1000 : null, remoteFlag: p.work_location_option === "remote" });
+      if (n) out.push(n);
+    }
+    if (!list.length || start + list.length >= (data.count || 0)) break;
+  }
+  return out;
+}
+
 async function fromRippling({ slug, company }) {
   const jobs = await getJSON(`https://api.rippling.com/platform/api/ats/v1/board/${encodeURIComponent(slug)}/jobs`);
   return (Array.isArray(jobs) ? jobs : []).map((j) => normalize({ source: "rippling", company: company || pretty(slug), title: j.name, location: j.workLocation?.label || "", url: j.url }));
@@ -678,6 +696,51 @@ async function fromTikTok() {
   return out;
 }
 const postJSONWith = (url, headers, body) => getJSON(url, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
+
+// Jane Street publishes its whole board as one public JSON file.
+const JANE_CITIES = { NYC: "New York, NY", CHI: "Chicago, IL", ATX: "Austin, TX" };
+async function fromJaneStreet() {
+  const jobs = await getJSON("https://www.janestreet.com/jobs/main.json");
+  const out = [];
+  for (const j of jobs) {
+    const location = JANE_CITIES[j.city];
+    if (!location) continue; // London, Hong Kong, Singapore
+    const kind = /intern/i.test(j.availability) ? "Internship" : /new grad/i.test(j.availability) ? "Full-time" : null;
+    const n = normalize({ source: "janestreet", company: "Jane Street", title: j.position, location, url: `https://www.janestreet.com/join-jane-street/position/${j.id}/`, kind });
+    if (!n) continue;
+    if (j.min_salary && j.max_salary) n.pay = posted(Number(String(j.min_salary).replace(/,/g, "")), Number(String(j.max_salary).replace(/,/g, "")), "year", "Pay range published in the job posting.") || undefined;
+    out.push(describeJob(n, htmlToText(j.overview || "")) || n);
+  }
+  return out;
+}
+
+// Goldman Sachs' Higher site reads from a public, unauthenticated GraphQL search.
+const GS_QUERY = "query GetRoles($searchQueryInput: RoleSearchQueryInput!) { roleSearch(searchQueryInput: $searchQueryInput) { totalCount items { roleId corporateTitle jobTitle locations { primary state country city } division externalSource { sourceId } } } }";
+// "2027 | Americas | New York City Area | Investment Banking | Summer Analyst" -> "Summer Analyst 2027 - Investment Banking"
+function gsTitle(t = "") {
+  const p = t.split("|").map((x) => x.trim());
+  if (p.length < 5 || !/^20\d\d$/.test(p[0])) return t;
+  return `${p[p.length - 1]} ${p[0]} - ${p.slice(3, -1).join(" - ")}`;
+}
+async function fromGoldman() {
+  const out = [], seen = new Set();
+  for (const experiences of [["CAMPUS"], ["EARLY_CAREER", "PROFESSIONAL"]]) for (let pageNumber = 0; pageNumber < 30; pageNumber++) {
+    const r = await postJSONWith("https://api-higher.gs.com/gateway/api/v1/graphql", { origin: "https://higher.gs.com" }, { operationName: "GetRoles", variables: { searchQueryInput: { page: { pageSize: 100, pageNumber }, sort: { sortStrategy: "POSTED_DATE", sortOrder: "DESC" }, filters: [], experiences, searchTerm: "" } }, query: GS_QUERY });
+    const items = r.data?.roleSearch?.items || [];
+    for (const j of items) {
+      const id = j.externalSource?.sourceId;
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      const us = (j.locations || []).filter((l) => l.country === "United States");
+      if (!us.length) continue;
+      const location = us.map((l) => [l.city, l.state].filter(Boolean).join(", ")).filter(Boolean).join(" • ") || "United States";
+      const n = normalize({ source: "goldman", company: "Goldman Sachs", title: gsTitle(j.jobTitle), location, url: `https://higher.gs.com/roles/${id}`, kind: experiences[0] === "CAMPUS" && /intern|summer/i.test(`${j.corporateTitle} ${j.jobTitle}`) ? "Internship" : undefined });
+      if (n) out.push(n);
+    }
+    if (items.length < 100) break;
+  }
+  return out;
+}
 
 // Community-maintained internship lists on GitHub catch employers on systems with no
 // public API (iCIMS, Taleo, custom sites). Fetched with ETags so unchanged files are free.
@@ -879,7 +942,7 @@ const LANES = { workday: 8, icims: 5, paylocity: 2, workable: 2, bamboohr: 16, l
 const research = new PayResearch({ anthropic: process.env.ANTHROPIC_API_KEY ? new Anthropic() : null, file: path.join(ROOT, "data", "research.json"), perCycle: Number(process.env.RESEARCH_PER_CYCLE || 20) });
 await research.load();
 
-const FETCHERS = { greenhouse: fromGreenhouse, lever: fromLever, ashby: fromAshby, workday: fromWorkday, smartrecruiters: fromSmartRecruiters, workable: fromWorkable, oracle: fromOracle, jibe: fromJibe, icims: fromIcims, eightfold: fromEightfold, rippling: fromRippling, jobvite: fromJobvite, jazzhr: fromJazzHR, bamboohr: fromBambooHR, paylocity: fromPaylocity };
+const FETCHERS = { greenhouse: fromGreenhouse, lever: fromLever, ashby: fromAshby, workday: fromWorkday, smartrecruiters: fromSmartRecruiters, workable: fromWorkable, oracle: fromOracle, jibe: fromJibe, icims: fromIcims, eightfold: fromEightfold, eightfoldapply: fromEightfoldApply, rippling: fromRippling, jobvite: fromJobvite, jazzhr: fromJazzHR, bamboohr: fromBambooHR, paylocity: fromPaylocity };
 
 function allTasks() {
   const tasks = [];
@@ -888,7 +951,7 @@ function allTasks() {
     tasks.push([`${type}:${b.slug || b.guid || (b.site ? `${b.host}/${b.site}` : b.host)}`, () => fn(b)]);
   }
   tasks.push(...COMMUNITY_LISTS.map(([label, url, kind]) => ["list:" + label, () => fromCommunityList(url, label, kind)]),
-    ...LIST_SOURCES.map(([label, url, only]) => ["list:" + label, () => fromRepoList(label, url, only)]), ["adzuna", fromAdzuna], ["usajobs", fromUSAJobs], ["amazon", fromAmazon], ["tiktok", fromTikTok], ["googlejobs", fromGoogleJobs]);
+    ...LIST_SOURCES.map(([label, url, only]) => ["list:" + label, () => fromRepoList(label, url, only)]), ["adzuna", fromAdzuna], ["usajobs", fromUSAJobs], ["amazon", fromAmazon], ["tiktok", fromTikTok], ["janestreet", fromJaneStreet], ["goldman", fromGoldman], ["googlejobs", fromGoogleJobs]);
   return tasks;
 }
 
